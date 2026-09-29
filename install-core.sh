@@ -8,7 +8,7 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL=/dev/null
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 BASE="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="/root/tproxy-server"
 SITE_INPUT="/opt/tproxy-site"

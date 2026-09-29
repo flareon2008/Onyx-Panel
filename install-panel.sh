@@ -419,9 +419,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.1.0..."
+    echo "Updating Onyx Panel 1.1.1..."
 else
-    echo "Configuring Onyx Panel 1.1.0..."
+    echo "Configuring Onyx Panel 1.1.1..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2227,7 +2227,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.1.0","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.1.1","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2454,16 +2454,33 @@ class Handler(BaseHTTPRequestHandler):
 }
 const pathForm=document.getElementById("panelPathForm");
 if(pathForm){const status=document.getElementById("panelPathStatus");
-pathForm.addEventListener("submit",e=>{e.preventDefault();submit(pathForm,status,res=>{
-  status.textContent="";
-  const note=document.createElement("span");note.textContent="Адрес изменён. Панель перезапускается — через ";
-  const secs=document.createElement("b");secs.textContent="6";
-  const tail=document.createElement("span");tail.textContent=" с откроется новый адрес: ";
-  const link=document.createElement("a");link.href=res.newUrl||"/";link.textContent=res.newUrl||"/";
-  const tail2=document.createElement("span");tail2.textContent=". Войдите на нём заново.";
-  status.append(note,secs,tail,link,tail2);
-  let left=6;const t=setInterval(()=>{left-=1;if(left<=0){clearInterval(t);location.href=link.href}else{secs.textContent=String(left)}},1000);
-})})}
+pathForm.addEventListener("submit",e=>{e.preventDefault();submit(pathForm,status,res=>{status.textContent="";showMove(res)})})}
+const moveOverlay=document.getElementById("moveOverlay");
+function showMove(res){
+  const url=res.newUrl||location.origin+res.newPath+"/login";
+  document.getElementById("moveUrl").textContent=url;
+  document.getElementById("moveLink").href=url;
+  moveOverlay.hidden=false;
+  requestAnimationFrame(()=>moveOverlay.classList.add("show"));
+  const ring=document.getElementById("moveRing"),secs=document.getElementById("moveSecs"),C=276.5;
+  let left=8;const total=8;
+  const setRing=()=>{ring.style.strokeDashoffset=(C*(1-Math.max(left,0)/total)).toFixed(1)};
+  secs.textContent=left;setRing();
+  const iv=setInterval(()=>{
+    left-=1;
+    if(left>0){secs.textContent=left;setRing();return}
+    clearInterval(iv);secs.textContent="…";ring.style.strokeDashoffset=C;
+  },1000);
+  const started=Date.now();
+  const probe=()=>{
+    fetch(res.newPath+"/__health",{cache:"no-store"}).then(r=>{
+      if(r.ok)location.href=url;
+      else if(Date.now()-started<30000)setTimeout(probe,1200);
+      else location.href=url;
+    }).catch(()=>{if(Date.now()-started<30000)setTimeout(probe,1200);else location.href=url});
+  };
+  setTimeout(probe,8600);
+}
 const loginForm=document.getElementById("panelLoginForm");
 if(loginForm){const status=document.getElementById("panelLoginStatus");const input=loginForm.querySelector("input[name=user]");
 loginForm.addEventListener("submit",e=>{e.preventDefault();submit(loginForm,status,res=>{input.value="";input.placeholder=res.login||input.placeholder})})}
@@ -2510,6 +2527,7 @@ if(compGrid){
 <section class="panel-setting"><div class="panel-setting-info"><b>Адрес панели</b><small>Секретный путь входа — любой, от 4 символов: /xray, /my-vpn, /ab12. Меняйте его, если ссылка стала известна посторонним. После смены панель перезапустится — входите заново по новому адресу.</small></div><form id="panelPathForm" action="{PANEL_PATH}/panel-path"><p class="panel-current"><span>Текущий адрес</span><code>{panel_url}</code></p><input type=hidden name=csrf value="{token}"><label for="panelPathInput">Новый путь</label><input id="panelPathInput" name="path" value="{esc(PANEL_PATH)}" spellcheck="false" autocomplete="off" required><div class="actions"><button type="submit" class="btn primary">Сменить адрес</button></div><p class="panel-setting-status" id="panelPathStatus" role="status"></p></form></section>
 <section class="panel-setting"><div class="panel-setting-info"><b>Логин администратора</b><small>От 1 до 64 символов. Используется вместе с паролем на странице входа.</small></div><form id="panelLoginForm" action="{PANEL_PATH}/panel-login"><input type=hidden name=csrf value="{token}"><label for="panelLoginInput">Новый логин</label><input id="panelLoginInput" name="user" placeholder="{admin_login}" maxlength="64" autocomplete="username" required><div class="actions"><button type="submit" class="btn primary">Сменить логин</button></div><p class="panel-setting-status" id="panelLoginStatus" role="status"></p></form></section>
 <section class="panel-setting"><div class="panel-setting-info"><b>Пароль</b><small>Минимум 3 символа. Смена пароля завершает все сессии панели.</small></div><form id="panelPasswordForm" action="{PANEL_PATH}/panel-password" data-goto="{PANEL_PATH}/login"><input type=hidden name=csrf value="{token}"><label for="panelPasswordInput">Новый пароль</label><input id="panelPasswordInput" type=password name="a" minlength="3" required autocomplete="new-password"><div class="actions"><button type="submit" class="btn primary">Сменить пароль</button></div><p class="panel-setting-status" id="panelPasswordStatus" role="status"></p></form></section>
+<div class="move-overlay" id="moveOverlay" hidden><div class="move-card"><div class="move-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" id="moveRing" cx="50" cy="50" r="44"/></svg><b id="moveSecs">8</b></div><h3>Панель переезжает</h3><p id="moveText">Адрес изменён. Caddy и панель перезапускаются — сейчас откроется новый адрес входа. Войдите на нём заново.</p><code id="moveUrl"></code><a class="btn primary" id="moveLink" href="#">Перейти сейчас</a></div></div>
 {panel_js}</div>
 <div class="card"><div class="card-title"><div><h2>Компоненты</h2><p>Обновление Xray, OpenFlux, AmneziaWG и MTProto с их репозиториев</p></div></div>
 <div class="component-stack" id="componentGrid" data-csrf="{token}" data-check="{PANEL_PATH}/component-check" data-install="{PANEL_PATH}/component-install" data-status="{PANEL_PATH}/component-status">
@@ -3116,7 +3134,10 @@ if(compGrid){
             def _apply_restart():
                 try:
                     subprocess.run(["systemctl","daemon-reload"],capture_output=True,timeout=30)
-                    subprocess.run(["systemctl","restart","onyx-panel.service","caddy.service"],capture_output=True,timeout=90,start_new_session=True)
+                    # Caddy first: the new routing must be live even if this
+                    # process is killed by the panel restart that follows.
+                    subprocess.run(["systemctl","restart","caddy.service"],capture_output=True,timeout=60,start_new_session=True)
+                    subprocess.run(["systemctl","restart","onyx-panel.service"],capture_output=True,timeout=60,start_new_session=True)
                 except Exception:
                     pass
             restart=threading.Timer(1.2,_apply_restart)
@@ -3254,7 +3275,38 @@ def expiry_sweep():
         except Exception as exc:
             print("expiry sweep failed:",type(exc).__name__,file=sys.stderr,flush=True)
 
+def heal_caddy_route():
+    # If a path change was interrupted before caddy restarted, the Caddyfile
+    # already names the new path while the running caddy still routes the old
+    # one and the panel ends up stranded behind the landing page. Reconcile on
+    # every start: remove stale panel routes, add the current one if missing.
+    caddy_path="/etc/caddy/Caddyfile"
+    try: s=open(caddy_path,encoding="utf-8").read()
+    except OSError: return
+    known={"/onyx-sub/*","/wpp-sub/*","/wpp-api/*",PANEL_PATH+"/*"}
+    route="    handle "+PANEL_PATH+"/* {\n        reverse_proxy 127.0.0.1:8090\n    }\n"
+    blocks=[(m.start(),m.end(),m.group(1)) for m in re.finditer(
+        r"(?m)^[ \t]*handle\s+(/\S+/\*)\s*\{\s*\n[ \t]*reverse_proxy 127\.0\.0\.1:8090[ \t]*\n[ \t]*\}[ \t]*\n?",s)]
+    stale=[b for b in blocks if b[2] not in known]
+    has_current=any(b[2]==PANEL_PATH+"/*" for b in blocks)
+    if not stale and has_current: return
+    for start,end,_ in sorted(stale,key=lambda b:-b[0]):
+        s=s[:start]+s[end:]
+    if not has_current:
+        m=re.search(r'(?m)^[ \t]*reverse_proxy 127\.0\.0\.1:8080[ \t]*\{',s)
+        if not m: return
+        s=s[:m.start()]+route+"\n"+s[m.start():]
+    open(caddy_path,"w",encoding="utf-8").write(s)
+    subprocess.run(["caddy","fmt","--overwrite",caddy_path],capture_output=True,timeout=20)
+    check=subprocess.run(["caddy","validate","--config",caddy_path,"--adapter","caddyfile"],capture_output=True,timeout=30)
+    if check.returncode!=0:
+        print("caddy route heal skipped: config invalid",file=sys.stderr,flush=True); return
+    r=subprocess.run(["systemctl","reload","caddy.service"],capture_output=True,timeout=30)
+    if r.returncode: subprocess.run(["systemctl","restart","caddy.service"],capture_output=True,timeout=60)
+    print("caddy route healed for",PANEL_PATH,file=sys.stderr,flush=True)
+
 def main():
+    heal_caddy_route()
     threading.Thread(target=expiry_sweep,daemon=True).start()
     ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()
 
@@ -3332,7 +3384,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.1.0
+Description=Onyx Panel 1.1.1
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service

@@ -77,7 +77,7 @@ nft list table ip onyx_awg >/dev/null 2>&1 ||
 systemctl is-active --quiet onyx-panel-sync-tls.timer ||
     die "The Xray TLS synchronization timer did not start."
 echo "Installation complete."
-printf '%s\n' '1.1.0' > /etc/onyx-panel/version
+printf '%s\n' '1.1.1' > /etc/onyx-panel/version
 chmod 0600 /etc/onyx-panel/version
 
 # Keep a private copy of the complete package on the server so the panel can
@@ -88,6 +88,6 @@ if [[ "$BASE" != "/opt/onyx-panel-package" ]]; then
     cp -a "$BASE/." /opt/onyx-panel-package.tmp/
     rm -rf /opt/onyx-panel-package
     mv /opt/onyx-panel-package.tmp /opt/onyx-panel-package
-    printf '%s\n' '1.1.0' > /opt/onyx-panel-package/version
+    printf '%s\n' '1.1.1' > /opt/onyx-panel-package/version
     chmod 0600 /opt/onyx-panel-package/version
 fi

@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.1.0'
+VERSION = '1.1.1'
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -763,6 +763,20 @@ input[type=date]{color-scheme:dark}
 .update-control .selx{width:100%}
 .country-flag-field .selx-trigger{font-size:13px}
 @media(max-width:700px){.clients-toolbar .selx{flex:1 1 calc(50% - 8px);max-width:none}.clients-toolbar .selx[data-for=clientSort]{max-width:none}.selx-trigger{font-size:15px}}
+/* Move modal: shown while the panel changes its address */
+.move-overlay{position:fixed;inset:0;z-index:95;display:grid;place-items:center;padding:16px;background:color-mix(in srgb,var(--bg) 45%,transparent);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);opacity:0;visibility:hidden;transition:opacity .25s ease,visibility .25s}
+.move-overlay.show{opacity:1;visibility:visible}
+.move-card{width:min(460px,100%);padding:30px 26px;text-align:center;border:1px solid color-mix(in srgb,var(--text) 10%,var(--line));border-radius:24px;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:var(--shadow);transform:scale(.92) translateY(12px);transition:transform .3s cubic-bezier(.2,.9,.3,1.25)}
+.move-overlay.show .move-card{transform:none}
+.move-ring{position:relative;width:104px;height:104px;margin:0 auto 16px}
+.move-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.move-ring-bg{fill:none;stroke:var(--line);stroke-width:6}
+.move-ring-fg{fill:none;stroke:var(--accent);stroke-width:6;stroke-linecap:round;stroke-dasharray:276.5;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear;filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 55%,transparent))}
+.move-ring b{position:absolute;inset:0;display:grid;place-items:center;font:700 30px/1 var(--font-mono);color:var(--accent)}
+.move-card h3{font-size:19px;font-weight:720;letter-spacing:-.02em;margin:0 0 8px}
+.move-card p{margin:0 0 14px;color:var(--muted);font-size:12.5px;line-height:1.6}
+.move-card code{display:block;margin:0 0 16px;padding:9px 12px;border-radius:10px;border:1px solid var(--line-soft);background:var(--input);font-family:var(--font-mono);font-size:12px;overflow-wrap:anywhere}
+.move-card .btn{width:100%}
 """
 
 
