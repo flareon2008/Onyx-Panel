@@ -80,7 +80,68 @@ document.querySelectorAll('[data-theme-toggle]').forEach(b=>{function label(){co
 async function onyxCopy(text,container=document.body){try{await navigator.clipboard.writeText(text);return}catch(e){}const prior=document.activeElement,x=document.createElement('textarea');x.value=text;x.setAttribute('aria-label','Копирование ссылки');x.style.position='fixed';x.style.opacity='0';container.appendChild(x);try{x.focus();x.select();if(!document.execCommand('copy'))throw new Error('Clipboard unavailable')}finally{x.remove();if(prior?.isConnected)prior.focus()}}
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-copy]');if(b&&!b.disabled){const old=b.innerHTML;b.disabled=true;try{await onyxCopy(b.dataset.copy,b.closest('dialog')||document.body);b.textContent=b.classList.contains('icon-btn')?'✓':'✓ Скопировано'}catch(err){b.textContent=b.classList.contains('icon-btn')?'!':'Не удалось скопировать'}finally{setTimeout(()=>{b.innerHTML=old;b.disabled=false},1600)}}const close=e.target.closest('[data-close-dialog]');if(close){const d=close.closest('dialog');d.close();const frame=d.querySelector('iframe');if(frame){frame.removeAttribute('srcdoc')}}});
 document.addEventListener('submit',e=>{const f=e.target.closest('form[data-confirm]');if(f&&!confirm(f.dataset.confirm))e.preventDefault()});
-(()=>{const burger=document.getElementById('navBurger'),nav=document.getElementById('topnav');if(!burger||!nav)return;function setNav(open){nav.classList.toggle('open',open);document.body.classList.toggle('nav-open',open);burger.setAttribute('aria-expanded',String(open));burger.setAttribute('aria-label',open?'Закрыть меню':'Открыть меню')}burger.addEventListener('click',()=>setNav(!nav.classList.contains('open')));document.addEventListener('click',e=>{if(nav.classList.contains('open')&&!e.target.closest('#topnav,#navBurger'))setNav(false)});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&nav.classList.contains('open')){setNav(false);burger.focus()}});nav.addEventListener('click',e=>{if(e.target.closest('a'))setNav(false)});const wide=matchMedia('(min-width:701px)');(wide.addEventListener?wide.addEventListener('change',m=>{if(m.matches)setNav(false)}):wide.addListener(m=>{if(m.matches)setNav(false)}));})();
+(()=>{const burger=document.getElementById('navBurger'),nav=document.getElementById('topnav');if(!burger||!nav)return;function setNav(open){nav.classList.toggle('open',open);document.body.classList.toggle('nav-open',open);burger.setAttribute('aria-expanded',String(open));burger.setAttribute('aria-label',open?'Закрыть меню':'Открыть меню')}burger.addEventListener('click',()=>setNav(!nav.classList.contains('open')));document.addEventListener('click',e=>{if(nav.classList.contains('open')&&!e.target.closest('#topnav,#navBurger'))setNav(false)});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&nav.classList.contains('open')){setNav(false);burger.focus()}});nav.addEventListener('click',e=>{if(e.target.closest('a'))setNav(false)});const wide=matchMedia('(min-width:701px)');(wide.addEventListener?wide.addEventListener('change',m=>{if(m.matches)setNav(false)}):wide.addListener(m=>{if(m.matches)setNav(false)}));
+/* Themed dropdowns over native selects */
+(function(){
+const CHEV='<svg class="ico selx-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+function build(sel){
+  if(sel.dataset.selxDone)return;sel.dataset.selxDone="1";
+  const wrap=document.createElement("div");wrap.className="selx";if(sel.id)wrap.dataset.for=sel.id;
+  sel.parentNode.insertBefore(wrap,sel);wrap.appendChild(sel);
+  sel.classList.add("selx-native");sel.setAttribute("tabindex","-1");sel.setAttribute("aria-hidden","true");
+  const btn=document.createElement("button");btn.type="button";btn.className="selx-trigger";
+  btn.setAttribute("aria-haspopup","listbox");btn.setAttribute("aria-expanded","false");
+  if(sel.getAttribute("aria-label"))btn.setAttribute("aria-label",sel.getAttribute("aria-label"));
+  const label=document.createElement("span");label.className="selx-label";
+  btn.append(label);btn.insertAdjacentHTML("beforeend",CHEV);wrap.append(btn);
+  const pop=document.createElement("div");pop.className="selx-pop";pop.setAttribute("role","listbox");wrap.append(pop);
+  let act=-1,openFlag=false;
+  function render(){
+    const cur=sel.value,curOpt=sel.selectedOptions[0];
+    label.textContent=curOpt?curOpt.textContent:"";
+    pop.innerHTML="";
+    [...sel.options].forEach(o=>{
+      const el=document.createElement("div");
+      el.className="selx-opt"+(o.value===cur?" sel":"")+(o.disabled?" dis":"");
+      el.setAttribute("role","option");el.setAttribute("aria-selected",o.value===cur?"true":"false");
+      el.textContent=o.textContent;
+      if(!o.disabled)el.addEventListener("click",()=>{if(sel.value!==o.value){sel.value=o.value;sel.dispatchEvent(new Event("change",{bubbles:true}))}closePop()});
+      pop.append(el);
+    });
+  }
+  function openPop(){
+    document.querySelectorAll(".selx.open").forEach(x=>{if(x!==wrap)x.classList.remove("open")});
+    render();wrap.classList.add("open");openFlag=true;btn.setAttribute("aria-expanded","true");
+    const selOpt=pop.querySelector(".selx-opt.sel");act=selOpt?[...pop.children].indexOf(selOpt):0;
+    if(selOpt)selOpt.scrollIntoView({block:"nearest"});
+    if(rectBelowViewport())wrap.classList.add("up");else wrap.classList.remove("up");
+  }
+  function closePop(refocus){
+    wrap.classList.remove("open");openFlag=false;btn.setAttribute("aria-expanded","false");
+    if(refocus)btn.focus({preventScroll:true});
+  }
+  btn.addEventListener("click",()=>{openFlag?closePop():openPop()});
+  wrap.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){if(wrap.classList.contains("open")){e.preventDefault();closePop(true)}return}
+    const items=[...pop.querySelectorAll(".selx-opt:not(.dis)")];
+    if(!wrap.classList.contains("open")){
+      if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();openPop()}
+      return
+    }
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();if(!items.length)return;act=e.key==="ArrowDown"?Math.min(act+1,items.length-1):Math.max(act-1,0);items.forEach((el,i)=>el.classList.toggle("act",i===act));items[act].scrollIntoView({block:"nearest"});return}
+    if(e.key==="Home"||e.key==="End"){e.preventDefault();act=e.key==="Home"?0:items.length-1;items.forEach((el,i)=>el.classList.toggle("act",i===act));items[act].scrollIntoView({block:"nearest"});return}
+    if(e.key==="Enter"||e.key===" "){e.preventDefault();if(items[act])items[act].click()}
+  });
+  document.addEventListener("click",e=>{if(openFlag&&!wrap.contains(e.target))closePop()});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&wrap.classList.contains("open"))closePop()});
+  sel.addEventListener("change",render);
+  new MutationObserver(render).observe(sel,{childList:true});
+  render();
+}
+document.querySelectorAll("select").forEach(build);
+new MutationObserver(muts=>{muts.forEach(m=>{m.addedNodes.forEach(n=>{if(n.nodeType===1){if(n.matches("select"))build(n);n.querySelectorAll("select").forEach(build)}})})}).observe(document.body,{childList:true,subtree:true});
+})();
+})();
 </script>"""
 
 
@@ -675,6 +736,33 @@ dialog::backdrop{background:color-mix(in srgb,var(--bg) 72%,transparent);backdro
 .expiry-pill{color:var(--amber)}
 .expiry-pill.expired{color:var(--red)}
 input[type=date]{color-scheme:dark}
+/* Themed dropdowns (progressive enhancement over native selects) */
+.selx{position:relative;min-width:0}
+.selx-native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;min-height:0;padding:0;border:0}
+.selx-trigger{display:flex;align-items:center;gap:8px;width:100%;min-height:41px;padding:9px 32px 9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--input);color:var(--text);font:inherit;text-align:left;cursor:pointer;transition:border-color .18s ease,box-shadow .18s ease,background-color .18s ease}
+.selx-trigger:hover{border-color:color-mix(in srgb,var(--text) 22%,var(--line))}
+.selx-trigger:focus-visible{outline:none;border-color:color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:0 0 0 3.5px color-mix(in srgb,var(--accent) 16%,transparent)}
+.selx.open .selx-trigger{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:0 0 0 3.5px color-mix(in srgb,var(--accent) 16%,transparent)}
+.selx-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selx-caret{position:absolute;right:11px;flex:0 0 auto;color:var(--muted);transition:transform .18s ease,color .18s ease}
+.selx.open .selx-caret{transform:rotate(180deg);color:var(--accent)}
+.selx-pop{position:absolute;z-index:70;top:calc(100% + 6px);left:0;right:0;max-height:286px;overflow:auto;padding:6px;border-radius:13px;background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border:1px solid color-mix(in srgb,var(--text) 10%,var(--line));box-shadow:0 24px 60px -18px rgba(2,8,16,.65);opacity:0;visibility:hidden;transform:translateY(-6px);transition:transform .16s ease,opacity .16s ease,visibility .16s}
+.selx.open .selx-pop{opacity:1;visibility:visible;transform:translateY(0)}
+.selx.up .selx-pop{top:auto;bottom:calc(100% + 6px);transform:translateY(6px)}
+.selx.up.open .selx-pop{transform:translateY(0)}
+.selx-opt{display:flex;align-items:center;gap:8px;min-height:36px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text);overflow-wrap:anywhere}
+.selx-opt:hover,.selx-opt.act{background:var(--tint)}
+.selx-opt.sel{color:var(--accent);font-weight:640}
+.selx-opt.sel:after{content:"✓";margin-left:auto;font-weight:700}
+.selx-opt.dis{opacity:.45;cursor:not-allowed}
+.clients-toolbar .selx{flex:1 1 160px;max-width:180px}
+.clients-toolbar .selx[data-for=clientSort]{max-width:140px}
+.clients-toolbar .selx-trigger{font-size:12px;min-height:38px}
+.version-row .selx{min-width:0}
+.version-row .selx-trigger{min-height:36px;padding:7px 30px 7px 10px;font-size:12px}
+.update-control .selx{width:100%}
+.country-flag-field .selx-trigger{font-size:13px}
+@media(max-width:700px){.clients-toolbar .selx{flex:1 1 calc(50% - 8px);max-width:none}.clients-toolbar .selx[data-for=clientSort]{max-width:none}.selx-trigger{font-size:15px}}
 """
 
 
