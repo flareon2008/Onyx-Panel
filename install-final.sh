@@ -36,7 +36,7 @@ PANEL_UPDATE=0
 if [[ -s /var/lib/onyx-panel/data.json ]] &&
    [[ -f /etc/systemd/system/onyx-panel.service ]] &&
    sed -n 's/^Environment=ONYX_PANEL_PATH=//p' /etc/systemd/system/onyx-panel.service |
-       head -n1 | grep -Eq '^/panel-[a-z0-9-]{3,64}$'; then
+       head -n1 | grep -Eq '^/[a-z0-9][a-z0-9-]{2,58}[a-z0-9]$'; then
     PANEL_UPDATE=1
     echo "Existing control panel detected; its users, password, address and site HTML will be preserved."
 else

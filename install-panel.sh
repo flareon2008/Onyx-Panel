@@ -124,7 +124,7 @@ FLAG_ARCHIVE="$BASE/onyx-panel/flags.tar.gz"
 if [[ "$UPDATING" == "1" ]]; then
     [[ -s "$DATA_FILE" ]] || die "Existing panel data was not found. Run the full installer instead."
     EXISTING_PATH="$(sed -n 's/^Environment=ONYX_PANEL_PATH=//p' "$SERVICE_FILE" 2>/dev/null | head -n1 || true)"
-    [[ "$EXISTING_PATH" =~ ^/panel-[a-z0-9-]{3,64}$ ]] || die "Existing panel address was not found. Run the full installer instead."
+    [[ "$EXISTING_PATH" =~ ^/[a-z0-9][a-z0-9-]{2,58}[a-z0-9]$ ]] || die "Existing panel address was not found. Run the full installer instead."
     PANEL_PATH="$EXISTING_PATH"
 fi
 
@@ -2507,7 +2507,7 @@ if(compGrid){
 </script>'''
             body=f'''<div class="page-head"><div><span class="eyebrow">ONYX PANEL / STUDIO</span><h1>Настройки</h1><p>Оформление сайта и доступ к панели</p></div></div>
 <div class="card settings-card"><div class="card-title"><div><h2>Панель</h2><p>Адрес входа и учётные данные администратора</p></div></div>
-<section class="panel-setting"><div class="panel-setting-info"><b>Адрес панели</b><small>Секретный путь входа. Меняйте его, если ссылка стала известна посторонним. После смены панель перезапустится — входите заново по новому адресу.</small></div><form id="panelPathForm" action="{PANEL_PATH}/panel-path"><p class="panel-current"><span>Текущий адрес</span><code>{panel_url}</code></p><input type=hidden name=csrf value="{token}"><label for="panelPathInput">Новый путь</label><input id="panelPathInput" name="path" value="{esc(PANEL_PATH)}" spellcheck="false" autocomplete="off" required><div class="actions"><button type="submit" class="btn primary">Сменить адрес</button></div><p class="panel-setting-status" id="panelPathStatus" role="status"></p></form></section>
+<section class="panel-setting"><div class="panel-setting-info"><b>Адрес панели</b><small>Секретный путь входа — любой, от 4 символов: /xray, /my-vpn, /ab12. Меняйте его, если ссылка стала известна посторонним. После смены панель перезапустится — входите заново по новому адресу.</small></div><form id="panelPathForm" action="{PANEL_PATH}/panel-path"><p class="panel-current"><span>Текущий адрес</span><code>{panel_url}</code></p><input type=hidden name=csrf value="{token}"><label for="panelPathInput">Новый путь</label><input id="panelPathInput" name="path" value="{esc(PANEL_PATH)}" spellcheck="false" autocomplete="off" required><div class="actions"><button type="submit" class="btn primary">Сменить адрес</button></div><p class="panel-setting-status" id="panelPathStatus" role="status"></p></form></section>
 <section class="panel-setting"><div class="panel-setting-info"><b>Логин администратора</b><small>От 1 до 64 символов. Используется вместе с паролем на странице входа.</small></div><form id="panelLoginForm" action="{PANEL_PATH}/panel-login"><input type=hidden name=csrf value="{token}"><label for="panelLoginInput">Новый логин</label><input id="panelLoginInput" name="user" placeholder="{admin_login}" maxlength="64" autocomplete="username" required><div class="actions"><button type="submit" class="btn primary">Сменить логин</button></div><p class="panel-setting-status" id="panelLoginStatus" role="status"></p></form></section>
 <section class="panel-setting"><div class="panel-setting-info"><b>Пароль</b><small>Минимум 3 символа. Смена пароля завершает все сессии панели.</small></div><form id="panelPasswordForm" action="{PANEL_PATH}/panel-password" data-goto="{PANEL_PATH}/login"><input type=hidden name=csrf value="{token}"><label for="panelPasswordInput">Новый пароль</label><input id="panelPasswordInput" type=password name="a" minlength="3" required autocomplete="new-password"><div class="actions"><button type="submit" class="btn primary">Сменить пароль</button></div><p class="panel-setting-status" id="panelPasswordStatus" role="status"></p></form></section>
 {panel_js}</div>
@@ -3065,8 +3065,11 @@ if(compGrid){
                 else: self.send_html(esc(msg),400)
             new_path=form.get("path","").strip().rstrip("/").lower()
             old_path=PANEL_PATH
-            if not re.fullmatch(r"/panel-[a-z0-9][a-z0-9-]{2,58}[a-z0-9]",new_path):
-                path_fail("Путь должен быть вида /panel-суффикс — 4–60 символов после panel- (латиница, цифры, дефис; без дефиса по краям).")
+            if not re.fullmatch(r"/[a-z0-9][a-z0-9-]{2,58}[a-z0-9]",new_path):
+                path_fail("Путь — от 4 до 60 символов после /: латиница, цифры и дефис, без дефиса по краям. Например /xray или /my-vpn.")
+                return
+            if new_path.strip("/") in ("onyx-sub","wpp-sub"):
+                path_fail("Этот путь занят маршрутами подписок. Выберите другой.")
                 return
             if new_path==old_path:
                 path_fail("Этот путь уже используется.")

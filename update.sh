@@ -81,7 +81,7 @@ fi
 if [[ "$MIGRATING_LEGACY" != 1 ]]; then
     [[ -f "$SERVICE" ]] || die "Panel service file was not found."
     PANEL_PATH="$(sed -n 's/^Environment=ONYX_PANEL_PATH=//p' "$SERVICE" | head -n1 || true)"
-    [[ "$PANEL_PATH" =~ ^/panel-[a-z0-9-]{3,64}$ ]] || die "Could not read the existing panel address."
+    [[ "$PANEL_PATH" =~ ^/[a-z0-9][a-z0-9-]{2,58}[a-z0-9]$ ]] || die "Could not read the existing panel address."
 fi
 
 if [[ "$MIGRATING_LEGACY" == 1 ]]; then
@@ -377,7 +377,7 @@ fi
 
 DOMAIN="$(sed -n 's/^Environment=TPROXY_HOSTNAME=//p' /etc/systemd/system/caddy.service.d/tproxy.conf | head -n1)"
 PANEL_PATH="$(sed -n 's/^Environment=ONYX_PANEL_PATH=//p' "$SERVICE" | head -n1 || true)"
-[[ "$PANEL_PATH" =~ ^/panel-[a-z0-9-]{3,64}$ ]] || die "The updated panel address could not be read."
+[[ "$PANEL_PATH" =~ ^/[a-z0-9][a-z0-9-]{2,58}[a-z0-9]$ ]] || die "The updated panel address could not be read."
 systemctl is-active --quiet onyx-panel-firewall.service ||
     die "Persistent user firewall did not start after the update."
 nft list table inet onyx_panel >/dev/null 2>&1 ||
