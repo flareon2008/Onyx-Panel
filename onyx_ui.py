@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.3.0'
+VERSION = '1.3.1'
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -1092,7 +1092,12 @@ document.getElementById('updateNoticeLater').addEventListener('click',()=>update
 
 
 CSS += '''
-.cascade-card{padding:20px}.cascade-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}.cascade-head h2{font-size:16px;overflow-wrap:anywhere}.cascade-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px}.cascade-endpoint{font:11px ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}.cascade-check{margin-top:12px;font-size:12px;color:var(--muted)}.cascade-latency.ok{color:var(--green)}.cascade-latency.err{color:var(--red)}.cascade-status{min-height:18px;font-size:11px;color:var(--muted);margin:8px 0 0}.cascade-status.err{color:var(--red)}.cascade-users{display:grid;gap:8px;margin:12px 0 16px;max-height:280px;overflow:auto}.cascade-users .check{margin:0}.badge.warn{color:var(--amber)}.badge.warn:before{background:var(--amber)}.cascade-section{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}.cascade-section summary{cursor:pointer;font-size:12px;color:var(--muted)}.cascade-section form{margin-top:12px}.cascade-section details{margin:0}
+.cascade-card{padding:20px}.cascade-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}.cascade-head h2{font-size:16px;overflow-wrap:anywhere}.cascade-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px}.cascade-endpoint{font:11px ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}.cascade-check{margin-top:12px;font-size:12px;color:var(--muted)}.cascade-latency.ok{color:var(--green)}.cascade-latency.err{color:var(--red)}.cascade-status{min-height:18px;font-size:11px;color:var(--muted);margin:10px 0 0}.cascade-status.err{color:var(--red)}.badge.warn{color:var(--amber)}.badge.warn:before{background:var(--amber)}
+.cascade-section{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}.cascade-section details{margin:0}.cascade-section summary{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:12px;font-weight:550;color:var(--muted);list-style:none;user-select:none}.cascade-section summary::-webkit-details-marker{display:none}.cascade-section summary:hover{color:var(--text)}.cascade-section summary:before{content:"";flex:0 0 auto;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}.cascade-section[open] summary:before{transform:rotate(45deg)}.cascade-section form{margin-top:13px}
+.cascade-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cascade-mode .choice-card{min-height:0;gap:9px;padding:12px 13px;border-radius:12px}.cascade-mode .choice-card strong{display:flex;align-items:center;gap:7px;font-size:12.5px}.cascade-mode .choice-card strong .ico{width:15px;height:15px;color:var(--accent)}.cascade-mode .choice-card small{font-size:10.5px;margin-top:3px}
+.cascade-clients{margin-top:13px}.cascade-clients-head{display:flex;align-items:center;gap:9px;margin-bottom:9px;font-size:11px}.cascade-clients-head b{margin-right:auto;font-size:11px;font-weight:550;color:var(--muted)}.cascade-count{font:550 11px ui-monospace,monospace;color:var(--accent);white-space:nowrap}.cascade-clients-tools{display:flex;gap:4px}.cascade-clients-tools button{padding:3px 10px;font-size:10px}
+.cascade-clients-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:7px}.cascade-client{position:relative;display:flex;align-items:center;gap:9px;margin:0;padding:8px 11px;border:1px solid var(--line);border-radius:11px;background:var(--input);color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}.cascade-client:hover{border-color:var(--accent)}.cascade-client input{position:absolute;opacity:0;width:1px;height:1px}.cascade-client:has(input:checked){border-color:var(--accent);background:var(--tint);box-shadow:inset 0 0 0 1px var(--accent)}.cascade-client:after{content:"";flex:0 0 auto;width:17px;height:17px;margin-left:auto;border:1.5px solid var(--line);border-radius:50%;transition:border .15s}.cascade-client:has(input:checked):after{border:5.5px solid var(--accent)}.cascade-client .client-initial{width:26px;height:26px;border-radius:8px;font-size:12px}.cascade-client-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500}
+@media(max-width:560px){.cascade-mode{grid-template-columns:1fr}.cascade-clients-grid{grid-template-columns:1fr 1fr}}
 '''
 
 CASCADE_JS='''<script>
@@ -1127,9 +1132,15 @@ document.querySelectorAll('form[data-cascade-toggle]').forEach(form=>{
       if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok')}}});
 });
 document.querySelectorAll('form[data-cascade-users]').forEach(form=>{
-  const block=form.querySelector('[data-users-block]');
+  const block=form.querySelector('[data-users-block]'),boxes=[...form.querySelectorAll('input[name=users]')],
+        count=form.querySelector('[data-users-count]');
   const sync=()=>{if(block)block.hidden=form.querySelector('input[name=mode]:checked').value!=='users'};
-  form.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',sync));sync();
+  const counter=()=>{if(count)count.textContent=boxes.filter(b=>b.checked).length+' из '+boxes.length};
+  boxes.forEach(b=>b.addEventListener('change',counter));
+  form.querySelectorAll('[data-users-all],[data-users-none]').forEach(btn=>btn.addEventListener('click',()=>{
+    const on=btn.hasAttribute('data-users-all');boxes.forEach(b=>b.checked=on);counter()}));
+  form.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',sync));
+  sync();counter();
   form.addEventListener('submit',async e=>{
     e.preventDefault();
     const status=form.querySelector('[data-form-status]'),button=form.querySelector('button.primary');
@@ -1138,7 +1149,7 @@ document.querySelectorAll('form[data-cascade-users]').forEach(form=>{
        comma-joined value instead of several "users" checkboxes. */
     const payload={id:form.querySelector('[name=id]').value,
       mode:form.querySelector('input[name=mode]:checked').value,
-      users:[...form.querySelectorAll('input[name=users]:checked')].map(c=>c.value).join(',')};
+      users:boxes.filter(b=>b.checked).map(b=>b.value).join(',')};
     try{await post('cascade-users',payload);location.reload()}
     catch(err){status.textContent=err.message;status.classList.add('err');button.disabled=false}});
 });
@@ -1178,10 +1189,18 @@ def cascade_card(item, vless_users, path, csrf):
     rows=[]
     for user in vless_users:
         uid=str(user['id'])
+        name=str(user.get('name') or uid)
         selected=' checked' if uid in (item.get('users') or []) else ''
-        rows.append(f'<label class="check"><input type="checkbox" name="users" value="{esc(uid)}"{selected}>{esc(user.get("name") or uid)}</label>')
-    users_block='<div class="cascade-users" data-users-block>'+''.join(rows)+'</div>' if rows else '<div class="cascade-users" data-users-block><p class="sub">VLESS-клиентов нет. Создайте их в разделе «Пользователи».</p></div>'
-    return f'''<div class="card cascade-card" data-cascade="{sid}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {state_class}">{state}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{str(enabled).lower()}" title="{'Отключить каскад' if enabled else 'Включить каскад'}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{cascade_check_html(item)}</div><details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="checks"><label class="check"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}>Весь VLESS-трафик</label><label class="check"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}>Только выбранные клиенты</label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
+        rows.append(f'<label class="cascade-client"><span class="client-initial" aria-hidden="true">{esc(name.strip()[:1].upper() or "•")}</span><span class="cascade-client-name" title="{esc(name)}">{esc(name)}</span><input type="checkbox" name="users" value="{esc(uid)}"{selected}></label>')
+    if rows:
+        users_block=('<div class="cascade-clients" data-users-block><div class="cascade-clients-head"><b>Клиенты</b>'
+                     '<span class="cascade-count" data-users-count></span>'
+                     '<span class="cascade-clients-tools"><button type="button" data-users-all>Все</button>'
+                     '<button type="button" data-users-none>Снять</button></span></div>'
+                     '<div class="cascade-clients-grid">'+''.join(rows)+'</div></div>')
+    else:
+        users_block='<div class="cascade-clients" data-users-block><p class="sub">VLESS-клиентов нет. Создайте их в разделе «Пользователи».</p></div>'
+    return f'''<div class="card cascade-card" data-cascade="{sid}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {state_class}">{state}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{str(enabled).lower()}" title="{'Отключить каскад' if enabled else 'Включить каскад'}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{cascade_check_html(item)}</div><details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="cascade-mode"><label class="choice-card"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}><span><strong>{icon("cascade")}Весь VLESS-трафик</strong><small>Все VLESS-клиенты пойдут через каскад</small></span></label><label class="choice-card"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}><span><strong>{icon("users")}Только выбранные</strong><small>Через каскад пойдут отмеченные, остальные — напрямую</small></span></label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
 
 
 def cascade_ui(items, users, path, csrf, domain):
