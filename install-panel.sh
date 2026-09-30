@@ -419,9 +419,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.2.5..."
+    echo "Updating Onyx Panel 1.2.6..."
 else
-    echo "Configuring Onyx Panel 1.2.5..."
+    echo "Configuring Onyx Panel 1.2.6..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2227,7 +2227,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.2.5","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.2.6","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2481,16 +2481,28 @@ function showMove(res){
   };
   setTimeout(probe,8600);
 }
-const loginForm=document.getElementById("panelLoginForm");
-if(loginForm){const status=document.getElementById("panelLoginStatus");const input=loginForm.querySelector("input[name=user]");
-loginForm.addEventListener("submit",e=>{e.preventDefault();submit(loginForm,status,res=>{input.value="";input.placeholder=res.login||input.placeholder})})}
+const accessForm=document.getElementById("panelAccessForm");
+if(accessForm){const status=document.getElementById("panelAccessStatus");
+accessForm.addEventListener("submit",async e=>{e.preventDefault();const btn=accessForm.querySelector("button[type=submit]");const label=btn.textContent;btn.disabled=true;status.className="panel-setting-status";status.textContent="Применяю…";
+try{
+  const csrf=accessForm.querySelector("[name=csrf]").value,user=accessForm.querySelector("[name=user]").value.trim(),pass=accessForm.querySelector("[name=a]").value;
+  const r1=await fetch(accessForm.dataset.login,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams({csrf,user})});
+  let res;try{res=await r1.json()}catch(err){throw new Error("Панель недоступна. Обновите страницу и попробуйте снова.")}
+  if(!r1.ok||!res.ok)throw new Error(res.message||"Не удалось изменить логин.");
+  if(pass){
+    const r2=await fetch(accessForm.dataset.password,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams({csrf,a:pass})});
+    let res2;try{res2=await r2.json()}catch(err){throw new Error("Панель недоступна. Обновите страницу и попробуйте снова.")}
+    if(!r2.ok||!res2.ok)throw new Error(res2.message||"Не удалось изменить пароль.");
+    status.className="panel-setting-status ok";status.textContent="Логин и пароль изменены. Открываем страницу входа…";
+    setTimeout(()=>{location.href=accessForm.dataset.goto},1900);return;
+  }
+  status.className="panel-setting-status ok";status.textContent=res.message||"Логин изменён.";
+}catch(err){status.className="panel-setting-status err";status.textContent=err.message}
+finally{btn.disabled=false;btn.textContent=label}})}
 const importForm=document.getElementById("importForm");
 if(importForm){const status=document.getElementById("importStatus"),file=document.getElementById("importFile"),data=document.getElementById("importData");
-file.addEventListener("change",()=>{const f=file.files&&file.files[0];if(!f)return;if(f.size>9*1024*1024){status.className="panel-setting-status err";status.textContent="Файл больше 9 МБ.";file.value="";return}const reader=new FileReader();reader.onload=()=>{data.value=String(reader.result).split(",").pop()||"";status.className="panel-setting-status ok";status.textContent="Файл загружен: "+f.name+". Нажмите «Восстановить из копии»."};reader.onerror=()=>{status.className="panel-setting-status err";status.textContent="Не удалось прочитать файл."};reader.readAsDataURL(f)});
+file.addEventListener("change",()=>{const f=file.files&&file.files[0];if(!f){document.getElementById("importFileName").textContent="Файл не выбран";return}document.getElementById("importFileName").textContent=f.name;if(f.size>9*1024*1024){status.className="panel-setting-status err";status.textContent="Файл больше 9 МБ.";file.value="";document.getElementById("importFileName").textContent="Файл не выбран";return}const reader=new FileReader();reader.onload=()=>{data.value=String(reader.result).split(",").pop()||"";status.className="panel-setting-status ok";status.textContent="Файл загружен: "+f.name+". Нажмите «Восстановить из копии»."};reader.onerror=()=>{status.className="panel-setting-status err";status.textContent="Не удалось прочитать файл."};reader.readAsDataURL(f)});
 importForm.addEventListener("submit",async e=>{e.preventDefault();if(!data.value.trim()){status.className="panel-setting-status err";status.textContent="Выберите файл копии или вставьте его содержимое.";return}if(!(await onyxConfirm("Заменить текущих пользователей, настройки и заглушки содержимым копии?",{title:"Восстановление из копии",ok:"Восстановить",danger:true})))return;submit(importForm,status)})};
-const passForm=document.getElementById("panelPasswordForm");
-if(passForm){const status=document.getElementById("panelPasswordStatus");
-passForm.addEventListener("submit",e=>{e.preventDefault();submit(passForm,status,res=>{const target=passForm.getAttribute("data-goto");setTimeout(()=>{location.href=target},2200)})})}
 const compGrid=document.getElementById("componentGrid");
 if(compGrid){
   const compCsrf=compGrid.dataset.csrf,checkUrl=compGrid.dataset.check,installUrl=compGrid.dataset.install,statusUrl=compGrid.dataset.status;
@@ -2525,8 +2537,7 @@ if(compGrid){
             body=f'''<div class="page-head"><div><span class="eyebrow">ONYX PANEL / STUDIO</span><h1>Настройки</h1><p>Оформление сайта и доступ к панели</p></div></div>
 <div class="settings-grid"><div class="card settings-card"><div class="card-title"><div><h2>Панель</h2><p>Адрес входа и учётные данные администратора</p></div></div>
 <section class="panel-setting"><div class="panel-setting-info"><b>Адрес панели</b><small>Секретный путь входа — любой, от 4 символов: /xray, /my-vpn, /ab12. Меняйте его, если ссылка стала известна посторонним. После смены панель перезапустится — входите заново по новому адресу.</small></div><form id="panelPathForm" action="{PANEL_PATH}/panel-path"><p class="panel-current"><span>Текущий адрес</span><code>{panel_url}</code></p><input type=hidden name=csrf value="{token}"><label for="panelPathInput">Новый путь</label><input id="panelPathInput" name="path" value="{esc(PANEL_PATH)}" spellcheck="false" autocomplete="off" required><div class="actions"><button type="submit" class="btn primary">Сменить адрес</button></div><p class="panel-setting-status" id="panelPathStatus" role="status"></p></form></section>
-<section class="panel-setting"><div class="panel-setting-info"><b>Логин администратора</b><small>От 1 до 64 символов. Используется вместе с паролем на странице входа.</small></div><form id="panelLoginForm" action="{PANEL_PATH}/panel-login"><input type=hidden name=csrf value="{token}"><label for="panelLoginInput">Новый логин</label><input id="panelLoginInput" name="user" placeholder="{admin_login}" maxlength="64" autocomplete="username" required><div class="actions"><button type="submit" class="btn primary">Сменить логин</button></div><p class="panel-setting-status" id="panelLoginStatus" role="status"></p></form></section>
-<section class="panel-setting"><div class="panel-setting-info"><b>Пароль</b><small>Минимум 3 символа. Смена пароля завершает все сессии панели.</small></div><form id="panelPasswordForm" action="{PANEL_PATH}/panel-password" data-goto="{PANEL_PATH}/login"><input type=hidden name=csrf value="{token}"><label for="panelPasswordInput">Новый пароль</label><input id="panelPasswordInput" type=password name="a" minlength="3" required autocomplete="new-password"><div class="actions"><button type="submit" class="btn primary">Сменить пароль</button></div><p class="panel-setting-status" id="panelPasswordStatus" role="status"></p></form></section>
+<section class="panel-setting"><div class="panel-setting-info"><b>Логин и пароль</b><small>Данные для входа в панель. Смена пароля завершает все сессии — вход по новому паролю.</small></div><form id="panelAccessForm" data-login="{PANEL_PATH}/panel-login" data-password="{PANEL_PATH}/panel-password" data-goto="{PANEL_PATH}/login"><input type=hidden name=csrf value="{token}"><div class="admin-access-grid"><div><label for="panelLoginInput">Логин</label><input id="panelLoginInput" name="user" value="{admin_login}" maxlength="64" autocomplete="username" required><small>От 1 до 64 символов</small></div><div><label for="panelPasswordInput">Новый пароль</label><input id="panelPasswordInput" type=password name="a" minlength="3" autocomplete="new-password" placeholder="Оставить текущий"><small>Минимум 3 символа</small></div></div><div class="actions"><button type="submit" class="btn primary">Изменить доступ</button></div><p class="panel-setting-status" id="panelAccessStatus" role="status"></p></form></section>
 <div class="move-overlay" id="moveOverlay" hidden><div class="move-card"><div class="move-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" id="moveRing" cx="50" cy="50" r="44"/></svg><b id="moveSecs">8</b></div><h3>Панель переезжает</h3><p id="moveText">Адрес изменён. Caddy и панель перезапускаются — сейчас откроется новый адрес входа. Войдите на нём заново.</p><code id="moveUrl"></code><a class="btn primary" id="moveLink" href="#">Перейти сейчас</a></div></div>
 {panel_js}</div>
 <div class="settings-col"><div class="card"><div class="card-title"><div><h2>Компоненты</h2><p>Обновление Xray, OpenFlux, AmneziaWG и MTProto с их репозиториев</p></div></div>
@@ -2539,7 +2550,7 @@ if(compGrid){
 <p class="muted" style="font-size:11px;margin:10px 0 0">Перед заменой бинарника создаётся его копия; если новая версия не запустится, предыдущая вернётся автоматически. MTProto собирается из исходников, закреплённых за версией панели.</p></div>
 <div class="card"><div class="card-title"><div><h2>Резервная копия</h2><p>Настройки, пользователи, заглушки и конфигурации — одним архивом</p></div></div>
 <div class="actions" style="margin:2px 0 8px"><a class="btn primary" href="{PANEL_PATH}/export" download>Скачать резервную копию</a><small>Архив содержит ключи доступа — храните его как пароль.</small></div>
-<form id="importForm" action="{PANEL_PATH}/import"><input type=hidden name=csrf value="{token}"><label for="importFile">Файл копии (.tar.gz)</label><input id="importFile" type="file" accept=".tar.gz,.tgz,application/gzip"><label for="importData">…или вставьте его содержимое (base64)</label><textarea id="importData" name="backup" rows="4" spellcheck="false" placeholder="Выберите файл выше — он подставится сюда автоматически"></textarea><div class="actions" style="margin-top:10px"><button type="submit" class="btn primary">Восстановить из копии</button><small>Импорт заменяет пользователей и настройки; текущее состояние сохраняется в архив-откат.</small></div><p class="panel-setting-status" id="importStatus" role="status"></p></form></div></div></div>
+<form id="importForm" action="{PANEL_PATH}/import"><input type=hidden name=csrf value="{token}"><label for="importFile">Файл копии (.tar.gz)</label><div class="file-field"><input id="importFile" type="file" accept=".tar.gz,.tgz,application/gzip"><label for="importFile" class="file-btn">{icon('link')}Обзор</label><span class="file-name" id="importFileName">Файл не выбран</span></div><label for="importData">…или вставьте его содержимое (base64)</label><textarea id="importData" name="backup" rows="4" spellcheck="false" placeholder="Выберите файл выше — он подставится сюда автоматически"></textarea><div class="actions" style="margin-top:10px"><button type="submit" class="btn primary">Восстановить из копии</button><small>Импорт заменяет пользователей и настройки; текущее состояние сохраняется в архив-откат.</small></div><p class="panel-setting-status" id="importStatus" role="status"></p></form></div></div></div>
 {editor}'''
             self.send_html(layout("Настройки",body,"settings")); return
 
@@ -2847,6 +2858,18 @@ if(compGrid){
                     retained=[item for item in items if item.get("id")!=preset_id]
                     if len(retained)==len(items): raise ValueError("Заглушка не найдена.")
                     save_custom_presets(retained)
+                elif operation=="save":
+                    preset_id=form.get("preset","")
+                    if not preset_id.startswith("custom-"): raise ValueError("Встроенную заглушку изменить нельзя — создайте свою.")
+                    target=next((item for item in items if item.get("id")==preset_id),None)
+                    if target is None: raise ValueError("Заглушка не найдена.")
+                    name=form.get("name","").strip()
+                    description=form.get("description","").strip() or "Пользовательская заглушка"
+                    if not 1<=len(name)<=80: raise ValueError("Название должно содержать от 1 до 80 символов.")
+                    if len(description)>180: raise ValueError("Описание не должно превышать 180 символов.")
+                    source=validate_html(form.get("html",""))
+                    target.update(name=name,description=description,html=source)
+                    save_custom_presets(items)
                 else:
                     raise ValueError("Неизвестная операция.")
                 self.redirect("/settings")
@@ -3384,7 +3407,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.2.5
+Description=Onyx Panel 1.2.6
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -3940,9 +3963,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.2.5 UPDATED"
+echo "          Onyx Panel 1.2.6 UPDATED"
 else
-echo "         Onyx Panel 1.2.5 IS READY"
+echo "         Onyx Panel 1.2.6 IS READY"
 fi
 echo "============================================================"
 echo
