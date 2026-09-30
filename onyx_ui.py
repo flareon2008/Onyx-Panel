@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.4.2'
+VERSION = '1.5.0'
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -34,6 +34,7 @@ def icon(name):
              'nodes': '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h6M11 17.5h6"/>',
              'cascade': '<path d="m12 2-10 5 10 5 10-5-10-5Z"/><path d="m2 12.5 10 5 10-5"/><path d="m2 17.5 10 5 10-5"/>',
              'power': '<path d="M12 3v8"/><path d="M17.4 6.6a8 8 0 1 1-10.8 0"/>',
+             'route': '<circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/><path d="M7 19h6a4 4 0 0 0 4-4V9"/><path d="m17 6 3-3 2 4-5-1Z"/>',
              'logout': '<path d="M10 4H4v16h6m4-12 4 4-4 4m-6-4h10"/>',
              'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/>',
              'refresh': '<path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6"/>',
@@ -328,7 +329,7 @@ def restart_buttons(path, csrf):
 
 
 def page_layout(title, body, path, active, domain, csrf=''):
-    links = ''.join(f'<a class="{"active" if key==active else ""}" href="{esc(path)}/{key}">{icon(glyph)}{label}</a>' for key, label, glyph in [('dashboard','Дашборд','grid'),('users','Пользователи','users'),('nodes','Ноды','nodes'),('cascade','Каскад','cascade'),('updates','Обновления','refresh'),('settings','Настройки','settings')])
+    links = ''.join(f'<a class="{"active" if key==active else ""}" href="{esc(path)}/{key}">{icon(glyph)}{label}</a>' for key, label, glyph in [('dashboard','Дашборд','grid'),('users','Пользователи','users'),('nodes','Ноды','nodes'),('cascade','Каскад','cascade'),('routing','Маршрутизация','route'),('updates','Обновления','refresh'),('settings','Настройки','settings')])
     social = ''
     banner = f'''<aside id="releaseBanner" class="release-banner" role="status" hidden><span class="release-banner-mark">{icon('refresh')}</span><div class="release-banner-copy"><b>Доступна новая версия Onyx Panel</b><small>Обновление можно установить с автоматической резервной копией</small></div><span id="releaseBannerVersion" class="release-banner-version"></span><div class="release-banner-actions"><a class="btn primary" href="{esc(path)}/updates">Посмотреть</a><button type="button" id="releaseBannerClose" class="release-banner-close" aria-label="Скрыть уведомление">×</button></div></aside>'''
     banner_script = f'''<script>(()=>{{const banner=document.getElementById('releaseBanner'),version=document.getElementById('releaseBannerVersion'),close=document.getElementById('releaseBannerClose');if(!banner)return;function dismissed(v){{try{{return localStorage.getItem('onyx-release-banner:'+v)==='1'}}catch(e){{return false}}}}function show(d){{if(!d||!d.available||!d.latest||dismissed(d.latest)){{banner.hidden=true;return}}banner.dataset.version=d.latest;version.textContent=(d.current||'—')+' → '+d.latest;banner.hidden=false}}async function check(){{try{{const r=await fetch('{esc(path)}/update-status',{{cache:'no-store'}});if(r.ok&&!r.redirected)show(await r.json())}}catch(e){{}}}}close.addEventListener('click',()=>{{const v=banner.dataset.version;if(v)try{{localStorage.setItem('onyx-release-banner:'+v,'1')}}catch(e){{}}banner.hidden=true}});window.addEventListener('onyx-update-status',e=>show(e.detail));check();setInterval(check,30000)}})();</script>'''
@@ -1176,7 +1177,129 @@ CSS += '''
 .onyx-ops-ring .fg{stroke:var(--accent);stroke-dasharray:113;stroke-dashoffset:70;animation:onyx-spin 1s linear infinite}
 @keyframes onyx-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.onyx-ops-ring .fg{animation:none}}
+.routing-row{display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);gap:20px;padding:20px 0;border-top:1px solid var(--line);align-items:start}.routing-row:first-of-type{border-top:0;padding-top:4px}.routing-row h3{font-size:14px;margin:0}.routing-row small{display:block;font-size:11px;color:var(--muted);margin-top:5px;line-height:1.55}@media(max-width:760px){.routing-row{grid-template-columns:1fr;gap:10px}}
+.routing-presets{display:flex;flex-wrap:wrap;gap:7px}
+.routing-preset{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border:1px dashed var(--line);border-radius:10px;background:var(--raised);font-size:11px;font-weight:550;color:var(--muted)}
+.routing-preset:hover{border-color:var(--accent);color:var(--text)}
+.routing-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.routing-chips:empty{display:none}
+.routing-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 7px 5px 10px;border:1px solid var(--line);border-radius:9px;background:var(--input);font:11px ui-monospace,monospace;max-width:100%}
+.routing-chip>span{overflow-wrap:anywhere}
+.routing-chip button{padding:0 3px;border:0;background:transparent;color:var(--muted);font-size:14px;line-height:1}
+.routing-chip button:hover{color:var(--red)}
+.routing-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:12px}
+.routing-add input{font:11px ui-monospace,monospace}
+.routing-switch-row{display:flex;justify-content:flex-end;align-items:center;gap:16px}
 '''
+
+ROUTING_IP_PRESETS=[
+    ('🏠','Приватные',['geoip:private']),
+    ('🇮🇷','Иран',['geoip:ir']),
+    ('🇨🇳','Китай',['geoip:cn']),
+    ('🇷🇺','Россия',['geoip:ru']),
+    ('🇻🇳','Вьетнам',['geoip:vn']),
+    ('🇪🇸','Испания',['geoip:es']),
+    ('🇮🇩','Индонезия',['geoip:id']),
+    ('🇺🇦','Украина',['geoip:ua']),
+]
+
+ROUTING_DOMAIN_PRESETS=[
+    ('🏠','Локальные',['geosite:private']),
+    ('🇮🇷','Иран',['domain:ir','geosite:ir']),
+    ('🇨🇳','Китай',['domain:cn','geosite:cn']),
+    ('🇷🇺','Россия',['domain:ru','domain:su','domain:рф','domain:xn--p1ai']),
+    ('🇻🇳','Вьетнам',['domain:vn','geosite:vn']),
+    ('🇺🇦','Украина',['domain:ua','geosite:ua']),
+    ('🇪🇸','Испания',['domain:es','geosite:es']),
+    ('🇮🇩','Индонезия',['domain:id','geosite:id']),
+]
+
+ROUTING_JS='''<script>
+(()=>{const PATH=@@PATH@@,CSRF=@@CSRF@@,LISTS=['direct_ips','direct_domains','ipv4_domains'],state={};
+function escHtml(v){return String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function render(list){
+  const box=document.querySelector('.chip-editor[data-list="'+list+'"] [data-chips]');
+  if(!box)return;
+  box.innerHTML=state[list].map((v,i)=>'<span class="routing-chip"><span>'+escHtml(v)+'</span><button type="button" data-i="'+i+'" aria-label="Убрать">×</button></span>').join('');}
+function addEntries(list,raw){
+  const parts=String(raw||'').split(',').map(s=>s.trim()).filter(Boolean);
+  let added=0;
+  parts.forEach(p=>{if(p.length<200&&!state[list].some(v=>v.toLowerCase()===p.toLowerCase())){state[list].push(p);added++}});
+  if(added)render(list);
+  return added;}
+LISTS.forEach(list=>{
+  const ed=document.querySelector('.chip-editor[data-list="'+list+'"]');
+  if(!ed)return;
+  state[list]=(ed.dataset.initial||'').split(',').filter(Boolean);
+  render(list);
+  ed.querySelectorAll('[data-entries]').forEach(btn=>btn.addEventListener('click',()=>{
+    const n=addEntries(list,btn.dataset.entries);
+    if(window.onyxToast)onyxToast(n?'Пресет добавлен — не забудьте сохранить':'Эти значения уже в списке');}));
+  const input=ed.querySelector('.routing-input'),addBtn=ed.querySelector('.routing-add-btn');
+  const submit=()=>{if(!input.value.trim())return;
+    const n=addEntries(list,input.value);
+    if(n)input.value='';else if(window.onyxToast)onyxToast('Некорректно или уже добавлено','err')};
+  addBtn.addEventListener('click',submit);
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submit()}});
+  ed.querySelector('[data-chips]').addEventListener('click',e=>{
+    const b=e.target.closest('[data-i]');if(!b)return;
+    state[list].splice(Number(b.dataset.i),1);render(list)});
+});
+const save=document.getElementById('routingSave');
+if(save)save.addEventListener('click',async()=>{
+  if(save.disabled)return;
+  save.disabled=true;const old=save.innerHTML;save.textContent='Сохраняю…';
+  try{const payload={};LISTS.forEach(l=>payload[l]=state[l].join(','));
+    const r=await fetch(PATH+'/routing-save',{method:'POST',headers:{'X-Onyx-Async':'1'},
+      body:new URLSearchParams({csrf:CSRF,...payload})});
+    if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');
+    let res;try{res=await r.json()}catch(e){throw new Error('Панель вернула некорректный ответ.')}
+    if(!r.ok||!res.ok)throw new Error(res.message||'Операция не выполнена.');
+    if(window.onyxToast)onyxToast(res.message||'Правила сохранены — применяются в фоне…');}
+  catch(e){if(window.onyxToast)onyxToast(e.message,'err')}
+  finally{save.disabled=false;save.innerHTML=old}});
+const sw=document.querySelector('[data-routing-torrent]');
+if(sw)sw.addEventListener('click',async()=>{
+  if(sw.disabled)return;
+  const previous=sw.getAttribute('aria-checked');
+  sw.disabled=true;sw.setAttribute('aria-checked',previous==='true'?'false':'true');
+  try{const r=await fetch(PATH+'/routing-torrent',{method:'POST',headers:{'X-Onyx-Async':'1'},
+      body:new URLSearchParams({csrf:CSRF,enabled:previous==='true'?'0':'1'})});
+    if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');
+    let res;try{res=await r.json()}catch(e){throw new Error('Панель вернула некорректный ответ.')}
+    if(!r.ok||!res.ok)throw new Error(res.message||'Операция не выполнена.');
+    if(window.onyxToast)onyxToast(res.message||'Сохранено — применяется в фоне…');}
+  catch(e){sw.setAttribute('aria-checked',previous);if(window.onyxToast)onyxToast(e.message,'err')}
+  finally{sw.disabled=false}});
+})();
+</script>'''
+
+
+def _chip_editor(list_key, presets, values, placeholder):
+    preset_html=''.join(
+        f'<button type="button" class="routing-preset" data-entries="{esc(",".join(entries))}">{flag} {esc(name)}</button>'
+        for flag,name,entries in presets)
+    return (f'<div class="chip-editor" data-list="{list_key}" data-initial="{esc(",".join(values))}">'
+            f'<div class="routing-presets">{preset_html}</div>'
+            f'<div class="routing-chips" data-chips></div>'
+            f'<div class="routing-add"><input class="routing-input" placeholder="{esc(placeholder)}" spellcheck="false" autocomplete="off">'
+            f'<button type="button" class="routing-add-btn">Добавить</button></div></div>')
+
+
+def routing_ui(routing, path, csrf, domain):
+    routing = routing or {}
+    torrents_enabled=bool(routing.get('block_torrents'))
+    banner='<p class="note"><b>Прямое соединение</b> означает, что определённый трафик не будет перенаправлен через другой сервер. Правила из этой вкладки проверяются <b>до</b> каскада: совпавший трафик всегда уходит с этого сервера напрямую.</p>'
+    ip_editor=_chip_editor('direct_ips',ROUTING_IP_PRESETS,routing.get('direct_ips',[]),'geoip:cn, 1.2.3.4 или 10.0.0.0/8')
+    domain_editor=_chip_editor('direct_domains',ROUTING_DOMAIN_PRESETS,routing.get('direct_domains',[]),'domain:example.com, geosite:cn')
+    ipv4_editor=_chip_editor('ipv4_domains',ROUTING_DOMAIN_PRESETS,routing.get('ipv4_domains',[]),'domain:example.com')
+    return f'''<div class="page-head"><div><h1>Маршрутизация</h1><p>Прямые подключения, IPv4 и блокировки</p></div><div class="actions"><button class="primary" id="routingSave">{icon('refresh')}Сохранить правила</button></div></div>{banner}
+<section class="card">
+<div class="routing-row"><div><h3>Прямые IP-адреса</h3><small>Трафик на эти адреса и сети уходит напрямую, минуя каскад. Пресеты добавляют geoip-списки Xray.</small></div>{ip_editor}</div>
+<div class="routing-row"><div><h3>Прямые домены</h3><small>Домены в формате Xray: domain:example.com, geosite:cn или regexp:… Совпавшие запросы идут напрямую.</small></div>{domain_editor}</div>
+<div class="routing-row"><div><h3>Правила IPv4</h3><small>Эти параметры позволяют клиентам обращаться к перечисленным доменам только через IPv4.</small></div>{ipv4_editor}</div>
+</section>
+<section class="card"><div class="card-title"><h2>Блокировки</h2></div><div class="routing-row" style="border-top:0;padding-top:4px"><div><h3>Заблокировать Торренты</h3><small>BitTorrent-трафик распознаётся сниффером Xray и блокируется. Работает для VLESS и Hysteria2.</small></div><div class="routing-switch-row"><button type="button" class="access-switch" data-routing-torrent role="switch" aria-label="Заблокировать торренты" aria-checked="{str(torrents_enabled).lower()}" title="{'Выключить блокировку торрентов' if torrents_enabled else 'Включить блокировку торрентов'}"></button></div></div></section>{ROUTING_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',json.dumps(csrf))}'''
 
 CASCADE_JS='''<script>
 (()=>{const PATH=@@PATH@@,CSRF=@@CSRF@@;
