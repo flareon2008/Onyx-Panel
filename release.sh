@@ -153,17 +153,22 @@ PRERELEASE="false"
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || PRERELEASE="true"
 BODY_JSON=$(printf '{"tag_name":"%s","name":"%s","body":"%s","prerelease":%s}' \
     "$(json_escape "$TAG")" "$(json_escape "$NAME")" "$(json_escape "$NOTES_FINAL")" "$PRERELEASE")
+# Send the payload from a file: passing UTF-8 notes on the Windows command
+# line mangles non-ASCII bytes before they reach curl.
+BODY_FILE=$(mktemp "${TMPDIR:-/tmp}/onyx-release-body.XXXXXX.json")
+trap 'rm -f "$NOTES_TMP" "$BODY_FILE"' EXIT
+printf '%s' "$BODY_JSON" > "$BODY_FILE"
 
 RELEASE_ID="$(curl -fsS --proto '=https' "${AUTH[@]}" "$API/repos/$SLUG/releases/tags/$TAG" 2>/dev/null |
     sed -n 's/.*"id":[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1 || true)"
 if [[ -n "$RELEASE_ID" ]]; then
     HTTP=$(curl -sS -o /dev/null -w '%{http_code}' --proto '=https' "${AUTH[@]}" -X PATCH \
-        -H "Content-Type: application/json" -d "$BODY_JSON" "$API/repos/$SLUG/releases/$RELEASE_ID")
+        -H "Content-Type: application/json" --data-binary @"$BODY_FILE" "$API/repos/$SLUG/releases/$RELEASE_ID")
     [[ "$HTTP" == 200 ]] || die "GitHub API returned $HTTP while updating the release."
     echo "Existing release for $TAG updated."
 else
     HTTP=$(curl -sS -o /dev/null -w '%{http_code}' --proto '=https' "${AUTH[@]}" -X POST \
-        -H "Content-Type: application/json" -d "$BODY_JSON" "$API/repos/$SLUG/releases")
+        -H "Content-Type: application/json" --data-binary @"$BODY_FILE" "$API/repos/$SLUG/releases")
     [[ "$HTTP" == 201 || "$HTTP" == 200 ]] || die "GitHub API returned $HTTP while creating the release. Check the token scopes (repo / Contents: read & write)."
 fi
 
