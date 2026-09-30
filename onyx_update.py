@@ -130,11 +130,16 @@ def check_release():
             if not tags: raise ValueError('Опубликованные стабильные теги не найдены.')
             tags = sorted(set(tags), key=version_tuple, reverse=True)[:30]
             latest = tags[0]
-            # Offer only the installed release and the two previous ones for
-            # install and rollback; older tags stay published in the repository.
+            # Offer a short window around the installed release: up to two
+            # newer ones (so an update can be selected), the installed one and
+            # two previous ones for rollback; older tags stay in the repository.
             installed = 'v' + current_version().lstrip('v')
             if installed in tags:
-                tags = tags[tags.index(installed):tags.index(installed) + 3]
+                idx = tags.index(installed)
+                window = tags[max(0, idx - 2):idx + 3]
+                if latest not in window:
+                    window = ([latest] + window)[:5]
+                tags = window
             else:
                 tags = tags[:3]
             state.update(latest=latest, releases=tags, checked=int(time.time()), phase='checked', message='Версии загружены.')
