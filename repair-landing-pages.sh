@@ -47,14 +47,29 @@ fi
 
 command -v tar >/dev/null 2>&1 || die "tar is required."
 RELAY_SOURCE_BUNDLED="$(cd "$(dirname "$0")" && pwd)/assets/tproxy-server-52a5feb.tar.gz"
+TPROXY_SOURCE_SHA256="2c56987035c7f0b9a3d40907fe9ff8889fd41d1a6dcb7bdd6e0de7784c442bfe"
 
 WORK="$(mktemp -d /tmp/tproxy-relay-update.XXXXXX)"
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 
-echo "Unpacking the pinned relay source included with Onyx Panel..."
-mkdir -p "$WORK/source"
-tar -xzf "$RELAY_SOURCE_BUNDLED" -C "$WORK/source" --strip-components=1 --no-same-owner
+if [[ -s "$RELAY_SOURCE_BUNDLED" ]] &&
+   echo "$TPROXY_SOURCE_SHA256  $RELAY_SOURCE_BUNDLED" | sha256sum -c - >/dev/null 2>&1; then
+    echo "Unpacking the pinned relay source included with Onyx Panel..."
+    mkdir -p "$WORK/source"
+    tar -xzf "$RELAY_SOURCE_BUNDLED" -C "$WORK/source" --strip-components=1 --no-same-owner
+else
+    echo "Bundled relay source not found; fetching the pinned commit from GitHub..."
+    command -v git >/dev/null 2>&1 || die "git is required to fetch the relay source."
+    export GIT_TERMINAL_PROMPT=0
+    mkdir -p "$WORK/source"
+    git -C "$WORK/source" init -q
+    git -C "$WORK/source" remote add origin https://github.com/telegramdesktop/tproxy-server.git
+    git -C "$WORK/source" fetch -q --depth 1 origin "$TPROXY_REF"
+    git -C "$WORK/source" checkout -q --detach FETCH_HEAD
+    [[ "$(git -C "$WORK/source" rev-parse HEAD)" == "$TPROXY_REF" ]] ||
+        die "Pinned relay source verification failed."
+fi
 [[ -f "$WORK/source/deploy/update-relay.sh" ]] ||
     die "The upstream transactional relay updater is missing."
 
