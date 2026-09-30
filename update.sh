@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Safe in-place updater for Onyx Panel 1.0.0.
-# The update runs from the unpacked Onyx Panel package: every module, source
-# archive and binary ships with the package, so nothing is downloaded from a
-# repository. Set ONYX_UPDATE_REPOSITORY to pull the package from your own
-# Git repository instead of using the local copy.
+# Safe in-place updater for Onyx Panel.
+# The panel modules (AmneziaWG binaries, OpenFlux) ship with the package; Xray,
+# Caddy, Go, AmneziaWG tools and the relay source are downloaded from their
+# official repositories during the update. Set ONYX_UPDATE_REPOSITORY to pull
+# the package from your own Git repository instead of using the local copy.
 set -Eeuo pipefail
 umask 077
 
@@ -15,7 +15,7 @@ REPOSITORY="${ONYX_UPDATE_REPOSITORY:-https://github.com/flareon2008/Onyx-Panel.
 REQUESTED_REF="${ONYX_PANEL_REF:-}"
 RELEASE_REF="$REQUESTED_REF"
 LOCAL_SOURCE=""
-LOCAL_VERSION="1.1.1"
+LOCAL_VERSION="1.2.0"
 # `--local` is accepted for compatibility and behaves the same as the default.
 LOCAL_SOURCE="$(cd "$(dirname "$0")" && pwd)"
 # Invoked as the installed /usr/local/sbin/onyx-panel-update, the script's own
@@ -29,7 +29,7 @@ done
 [[ -s "$LOCAL_SOURCE/assets/OpenFlux-linux-amd64" || -s "$LOCAL_SOURCE/OpenFlux-linux-amd64" ]] || {
     echo "Incomplete local archive: OpenFlux-linux-amd64 is missing." >&2; exit 1;
 }
-for asset in amneziawg-go-linux-amd64 awg-linux-amd64 awg-quick-linux-amd64 Xray-linux-64.zip caddy_2.11.4_linux_amd64.tar.gz go1.26.8.linux-amd64.tar.gz amneziawg-tools-ubuntu-22.04.zip tproxy-server-52a5feb.tar.gz; do
+for asset in amneziawg-go-linux-amd64 awg-linux-amd64 awg-quick-linux-amd64; do
     [[ -s "$LOCAL_SOURCE/assets/$asset" ]] || { echo "Incomplete local archive: assets/$asset is missing." >&2; exit 1; }
 done
 for font in manrope-cyrillic-wght-normal.woff2 manrope-latin-wght-normal.woff2 jetbrains-mono-cyrillic-wght-normal.woff2 jetbrains-mono-latin-wght-normal.woff2; do
@@ -50,7 +50,7 @@ exec 9>/run/lock/onyx-panel.lock
 flock -n 9 || die "Another Onyx Panel install, update or removal is already running."
 
 echo "============================================================"
-echo "     Onyx Panel 1.0.0 — SAFE UPDATE"
+echo "     Onyx Panel 1.2.0 — SAFE UPDATE"
 echo "============================================================"
 echo "Users, administrator password, panel URL and site HTML will be retained."
 

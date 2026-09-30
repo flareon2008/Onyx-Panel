@@ -9,9 +9,7 @@ for file in install-panel.sh install-core.sh uninstall-onyx-panel.sh update.sh o
 done
 [[ -s "$BASE/assets/OpenFlux-linux-amd64" || -s "$BASE/OpenFlux-linux-amd64" ]] ||
     die "Package is incomplete: missing OpenFlux-linux-amd64. Extract the complete archive."
-for asset in amneziawg-go-linux-amd64 awg-linux-amd64 awg-quick-linux-amd64 \
-             Xray-linux-64.zip caddy_2.11.4_linux_amd64.tar.gz go1.26.8.linux-amd64.tar.gz \
-             amneziawg-tools-ubuntu-22.04.zip tproxy-server-52a5feb.tar.gz amneziawg-go-b5928ef.tar.gz; do
+for asset in amneziawg-go-linux-amd64 awg-linux-amd64 awg-quick-linux-amd64; do
     [[ -s "$BASE/assets/$asset" ]] || die "Package is incomplete: missing assets/$asset. Extract the complete archive."
 done
 [[ -s "$BASE/onyx-panel/flags.tar.gz" ]] ||
@@ -30,7 +28,7 @@ cleanup_credentials() {
 }
 trap cleanup_credentials EXIT
 
-echo "Onyx Panel 1.0.0: preparing server..."
+echo "Onyx Panel 1.2.0: preparing server..."
 
 PANEL_UPDATE=0
 if [[ -s /var/lib/onyx-panel/data.json ]] &&
@@ -77,7 +75,7 @@ nft list table ip onyx_awg >/dev/null 2>&1 ||
 systemctl is-active --quiet onyx-panel-sync-tls.timer ||
     die "The Xray TLS synchronization timer did not start."
 echo "Installation complete."
-printf '%s\n' '1.1.1' > /etc/onyx-panel/version
+printf '%s\n' '1.2.0' > /etc/onyx-panel/version
 chmod 0600 /etc/onyx-panel/version
 
 # Keep a private copy of the complete package on the server so the panel can
@@ -88,6 +86,6 @@ if [[ "$BASE" != "/opt/onyx-panel-package" ]]; then
     cp -a "$BASE/." /opt/onyx-panel-package.tmp/
     rm -rf /opt/onyx-panel-package
     mv /opt/onyx-panel-package.tmp /opt/onyx-panel-package
-    printf '%s\n' '1.1.1' > /opt/onyx-panel-package/version
+    printf '%s\n' '1.2.0' > /opt/onyx-panel-package/version
     chmod 0600 /opt/onyx-panel-package/version
 fi
