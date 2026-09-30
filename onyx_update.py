@@ -130,6 +130,13 @@ def check_release():
             if not tags: raise ValueError('Опубликованные стабильные теги не найдены.')
             tags = sorted(set(tags), key=version_tuple, reverse=True)[:30]
             latest = tags[0]
+            # Offer only the installed release and the two previous ones for
+            # install and rollback; older tags stay published in the repository.
+            installed = 'v' + current_version().lstrip('v')
+            if installed in tags:
+                tags = tags[tags.index(installed):tags.index(installed) + 3]
+            else:
+                tags = tags[:3]
             state.update(latest=latest, releases=tags, checked=int(time.time()), phase='checked', message='Версии загружены.')
         except (OSError, subprocess.TimeoutExpired):
             raise ValueError('Не удалось проверить репозиторий. Повторите позже.')
