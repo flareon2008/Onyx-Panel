@@ -354,6 +354,30 @@ if [[ ! -x "$XRAY_BIN" ]] || ! "$XRAY_BIN" version 2>/dev/null | grep -q "${XRAY
     rm -rf "$XRAY_UNPACK"
 fi
 
+# The routing tab builds geoip:/geosite: rules, so the geo databases must sit
+# next to the binary. The binary block above is skipped when the version is
+# already current, hence this unconditional refresh.
+XRAY_GEO_TMP="$(mktemp -d /tmp/onyx-panel-geo.XXXXXX)"
+GEO_ZIPPED=0
+if [[ -s "${BASE}/assets/Xray-linux-64.zip" ]]; then
+    echo "      Using geo databases included with this release."
+    unzip -q -o "${BASE}/assets/Xray-linux-64.zip" geoip.dat geosite.dat -d "$XRAY_GEO_TMP" && GEO_ZIPPED=1
+else
+    curl --fail --silent --show-error --location \
+        --proto '=https' --proto-redir '=https' --tlsv1.2 \
+        --retry 3 --retry-all-errors --connect-timeout 20 \
+        --output "$XRAY_GEO_TMP/geo.zip" \
+        "https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-linux-64.zip" \
+    && unzip -q -o "$XRAY_GEO_TMP/geo.zip" geoip.dat geosite.dat -d "$XRAY_GEO_TMP" && GEO_ZIPPED=1
+    rm -f "$XRAY_GEO_TMP/geo.zip"
+fi
+if [[ "$GEO_ZIPPED" == 1 ]]; then
+    install -o root -g root -m 0644 "$XRAY_GEO_TMP/geoip.dat" "$XRAY_GEO_TMP/geosite.dat" "$XRAY_ROOT/"
+else
+    echo "      WARNING: geo databases unavailable; routing presets using geoip:/geosite: will not load." >&2
+fi
+rm -rf "$XRAY_GEO_TMP"
+
 echo "      Preparing OpenFlux ${OPENFLUX_VERSION}..."
 if ! id onyx-openflux >/dev/null 2>&1; then
     if [[ -d /var/lib/onyx-openflux ]]; then
@@ -419,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.5.0..."
+    echo "Updating Onyx Panel 1.5.1..."
 else
-    echo "Configuring Onyx Panel 1.5.0..."
+    echo "Configuring Onyx Panel 1.5.1..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2334,7 +2358,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.5.0","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.5.1","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -3694,7 +3718,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.5.0
+Description=Onyx Panel 1.5.1
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4250,9 +4274,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.5.0 UPDATED"
+echo "          Onyx Panel 1.5.1 UPDATED"
 else
-echo "         Onyx Panel 1.5.0 IS READY"
+echo "         Onyx Panel 1.5.1 IS READY"
 fi
 echo "============================================================"
 echo
