@@ -419,9 +419,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.2.7..."
+    echo "Updating Onyx Panel 1.2.8..."
 else
-    echo "Configuring Onyx Panel 1.2.7..."
+    echo "Configuring Onyx Panel 1.2.8..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -1657,7 +1657,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 from collections import defaultdict, deque
 from onyx_subscriptions import PREFIX as SUB_PREFIX
 from onyx_panel_extras import preview_document
-from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, openflux_ui, client_records, nodes_ui, updates_ui
+from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, openflux_ui, client_records, nodes_ui, updates_ui, icon
 import onyx_metrics as server_metrics
 import onyx_update as web_updates
 import onyx_components as components
@@ -2227,7 +2227,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.2.7","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.2.8","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2319,7 +2319,7 @@ class Handler(BaseHTTPRequestHandler):
         if path==PANEL_PATH+"/export":
             try: blob=build_backup_tar()
             except ValueError as exc: self.send_html(esc(str(exc)),500); return
-            except Exception:
+            except Exception as exc:
                 print("export failed:",type(exc).__name__,file=sys.stderr,flush=True)
                 self.send_html("Не удалось собрать резервную копию.",500); return
             self.send_response(200)
@@ -3407,7 +3407,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.2.7
+Description=Onyx Panel 1.2.8
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -3963,9 +3963,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.2.7 UPDATED"
+echo "          Onyx Panel 1.2.8 UPDATED"
 else
-echo "         Onyx Panel 1.2.7 IS READY"
+echo "         Onyx Panel 1.2.8 IS READY"
 fi
 echo "============================================================"
 echo
