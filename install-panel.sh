@@ -419,9 +419,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.2.2..."
+    echo "Updating Onyx Panel 1.2.3..."
 else
-    echo "Configuring Onyx Panel 1.2.2..."
+    echo "Configuring Onyx Panel 1.2.3..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2227,7 +2227,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.2.2","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.2.3","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -3384,7 +3384,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.2.2
+Description=Onyx Panel 1.2.3
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -3409,7 +3409,10 @@ EOF
 chmod 0644 "$SERVICE_FILE"
 
 echo "[4.2/6] Installing Onyx console menu..."
-install -o root -g root -m 0755 "$BASE/update.sh" /usr/local/sbin/onyx-panel-update
+# Replace the updater atomically: the running outer update.sh may still be
+# executing from this exact path, so never truncate its inode in place.
+install -o root -g root -m 0755 "$BASE/update.sh" /usr/local/sbin/.onyx-panel-update.new
+mv -f /usr/local/sbin/.onyx-panel-update.new /usr/local/sbin/onyx-panel-update
 cat > /etc/systemd/system/onyx-panel-web-update.service <<'UNIT'
 [Unit]
 Description=Onyx Panel administrator-requested update
@@ -3937,9 +3940,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.2.0 UPDATED"
+echo "          Onyx Panel 1.2.3 UPDATED"
 else
-echo "         Onyx Panel 1.2.0 IS READY"
+echo "         Onyx Panel 1.2.3 IS READY"
 fi
 echo "============================================================"
 echo

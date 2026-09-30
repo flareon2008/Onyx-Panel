@@ -15,7 +15,7 @@ REPOSITORY="${ONYX_UPDATE_REPOSITORY:-https://github.com/flareon2008/Onyx-Panel.
 REQUESTED_REF="${ONYX_PANEL_REF:-}"
 RELEASE_REF="$REQUESTED_REF"
 LOCAL_SOURCE=""
-LOCAL_VERSION="1.2.2"
+LOCAL_VERSION="1.2.3"
 # `--local` is accepted for compatibility and behaves the same as the default.
 LOCAL_SOURCE="$(cd "$(dirname "$0")" && pwd)"
 # Invoked as the installed /usr/local/sbin/onyx-panel-update, the script's own
@@ -39,7 +39,7 @@ done
     echo "Incomplete local archive: onyx-panel/flags.tar.gz is missing." >&2; exit 1;
 }
 SERVICE="/etc/systemd/system/onyx-panel.service"
-LEGACY_SERVICE="/etc/systemd/system/onyx-panel.service"
+LEGACY_SERVICE="/etc/systemd/system/tproxy-panel.service"
 DATA_FILE="/var/lib/onyx-panel/data.json"
 PRIMARY_SECRET="/etc/onyx-panel/primary-secret"
 
@@ -50,7 +50,7 @@ exec 9>/run/lock/onyx-panel.lock
 flock -n 9 || die "Another Onyx Panel install, update or removal is already running."
 
 echo "============================================================"
-echo "     Onyx Panel 1.2.0 — SAFE UPDATE"
+echo "     Onyx Panel 1.2.3 — SAFE UPDATE"
 echo "============================================================"
 echo "Users, administrator password, panel URL and site HTML will be retained."
 
@@ -370,7 +370,7 @@ install -o root -g root -m 0755 \
     /usr/local/sbin/onyx-panel-uninstall
 
 if [[ -f "$LEGACY_SERVICE" ]]; then
-    systemctl disable --now onyx-panel.service 2>/dev/null || true
+    systemctl disable --now tproxy-panel.service 2>/dev/null || true
     rm -f "$LEGACY_SERVICE"
     systemctl daemon-reload
 fi
