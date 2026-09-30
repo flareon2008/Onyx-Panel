@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.4.1'
+VERSION = '1.4.2'
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -1289,7 +1289,8 @@ def cascade_check_html(item):
     check=item.get('last_check') or {}
     when=' · '+time.strftime('%d.%m.%Y %H:%M',time.localtime(check['checked_at'])) if check.get('checked_at') else ''
     if check.get('ok'):
-        return f'<span class="cascade-latency ok" data-check>Проверка пройдена · {int(check.get("ms",0))} мс{when}</span>'
+        exit_ip=' · выход '+esc(check['exit_ip']) if check.get('exit_ip') else ''
+        return f'<span class="cascade-latency ok" data-check>Проверка пройдена · {int(check.get("ms",0))} мс{exit_ip}{when}</span>'
     if check.get('message'):
         return f'<span class="cascade-latency err" data-check>Проверка не прошла: {esc(check.get("message"))}{when}</span>'
     return '<span class="cascade-latency" data-check>Ещё не проверялся</span>'

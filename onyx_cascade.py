@@ -421,6 +421,17 @@ def ping(record, xray_bin=XRAY_BIN, curl_bin='curl'):
                 probe['message'] = 'Через каскад пришёл ответ HTTP %s.' % (code or '?')
                 return probe
             probe.update({'ok': True, 'ms': int(seconds * 1000)})
+            # Report the exit IP the upstream gives out: admins check it against
+            # whatismyip-style sites to confirm the cascade is really applied.
+            try:
+                ipresult = subprocess.run(
+                    [curl_bin, '-sS', '--max-time', '6', '--socks5-hostname', '127.0.0.1:%d' % port,
+                     'https://api.ipify.org'], capture_output=True, text=True, timeout=9)
+                exit_ip = (ipresult.stdout or '').strip()
+                if ipresult.returncode == 0 and re.fullmatch(r'[0-9.]{7,15}', exit_ip):
+                    probe['exit_ip'] = exit_ip
+            except Exception:
+                pass
             return probe
     finally:
         if process is not None:
