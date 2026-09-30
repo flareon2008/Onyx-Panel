@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.2.4'
+VERSION = '1.2.5'
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -791,7 +791,7 @@ input[type=date]{color-scheme:dark}
 .onyx-cal:not(.filled) .onyx-cal-value{color:var(--muted)}
 .onyx-cal-caret{position:absolute;right:11px;top:50%;width:16px;height:16px;flex:0 0 auto;color:var(--muted);transform:translateY(-50%);transition:transform .18s ease,color .18s ease;pointer-events:none}
 .onyx-cal.open .onyx-cal-caret{transform:translateY(-50%) rotate(180deg);color:var(--accent)}
-.onyx-cal-pop{position:absolute;z-index:71;top:calc(100% + 6px);left:0;right:0;min-width:0;padding:12px;border-radius:13px;background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border:1px solid color-mix(in srgb,var(--text) 10%,var(--line));box-shadow:0 24px 60px -18px rgba(2,8,16,.65);opacity:0;visibility:hidden;transform:translateY(-6px);transition:transform .16s ease,opacity .16s ease,visibility .16s}
+.onyx-cal-pop{position:absolute;z-index:71;top:calc(100% + 6px);left:0;width:min(330px,100%);min-width:0;padding:12px;border-radius:13px;background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border:1px solid color-mix(in srgb,var(--text) 10%,var(--line));box-shadow:0 24px 60px -18px rgba(2,8,16,.65);opacity:0;visibility:hidden;transform:translateY(-6px);transition:transform .16s ease,opacity .16s ease,visibility .16s}
 .onyx-cal.open .onyx-cal-pop{opacity:1;visibility:visible;transform:translateY(0)}
 .onyx-cal.up .onyx-cal-pop{top:auto;bottom:calc(100% + 6px);transform:translateY(6px)}
 .onyx-cal.up.open .onyx-cal-pop{transform:translateY(0)}
