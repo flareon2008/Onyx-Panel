@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.2.10'
+VERSION = '1.3.0'
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -32,6 +32,7 @@ def icon(name):
              'users': '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 4a3 3 0 0 1 0 6m1 4a5 5 0 0 1 3 4v3"/>',
              'settings': '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
              'nodes': '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h6M11 17.5h6"/>',
+             'cascade': '<path d="m12 2-10 5 10 5 10-5-10-5Z"/><path d="m2 12.5 10 5 10-5"/><path d="m2 17.5 10 5 10-5"/>',
              'logout': '<path d="M10 4H4v16h6m4-12 4 4-4 4m-6-4h10"/>',
              'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/>',
              'refresh': '<path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6"/>',
@@ -266,7 +267,7 @@ def theme_button(): return '<button type="button" class="quiet" data-theme-toggl
 
 
 def page_layout(title, body, path, active, domain):
-    links = ''.join(f'<a class="{"active" if key==active else ""}" href="{esc(path)}/{key}">{icon(glyph)}{label}</a>' for key, label, glyph in [('dashboard','Дашборд','grid'),('users','Пользователи','users'),('nodes','Ноды','nodes'),('updates','Обновления','refresh'),('settings','Настройки','settings')])
+    links = ''.join(f'<a class="{"active" if key==active else ""}" href="{esc(path)}/{key}">{icon(glyph)}{label}</a>' for key, label, glyph in [('dashboard','Дашборд','grid'),('users','Пользователи','users'),('nodes','Ноды','nodes'),('cascade','Каскад','cascade'),('updates','Обновления','refresh'),('settings','Настройки','settings')])
     social = ''
     banner = f'''<aside id="releaseBanner" class="release-banner" role="status" hidden><span class="release-banner-mark">{icon('refresh')}</span><div class="release-banner-copy"><b>Доступна новая версия Onyx Panel</b><small>Обновление можно установить с автоматической резервной копией</small></div><span id="releaseBannerVersion" class="release-banner-version"></span><div class="release-banner-actions"><a class="btn primary" href="{esc(path)}/updates">Посмотреть</a><button type="button" id="releaseBannerClose" class="release-banner-close" aria-label="Скрыть уведомление">×</button></div></aside>'''
     banner_script = f'''<script>(()=>{{const banner=document.getElementById('releaseBanner'),version=document.getElementById('releaseBannerVersion'),close=document.getElementById('releaseBannerClose');if(!banner)return;function dismissed(v){{try{{return localStorage.getItem('onyx-release-banner:'+v)==='1'}}catch(e){{return false}}}}function show(d){{if(!d||!d.available||!d.latest||dismissed(d.latest)){{banner.hidden=true;return}}banner.dataset.version=d.latest;version.textContent=(d.current||'—')+' → '+d.latest;banner.hidden=false}}async function check(){{try{{const r=await fetch('{esc(path)}/update-status',{{cache:'no-store'}});if(r.ok&&!r.redirected)show(await r.json())}}catch(e){{}}}}close.addEventListener('click',()=>{{const v=banner.dataset.version;if(v)try{{localStorage.setItem('onyx-release-banner:'+v,'1')}}catch(e){{}}banner.hidden=true}});window.addEventListener('onyx-update-status',e=>show(e.detail));check();setInterval(check,30000)}})();</script>'''
@@ -1088,6 +1089,109 @@ async function refresh(){{if(busy||document.hidden)return;busy=true;try{{const r
 async function automaticUpdateCheck(status){{if(status?.checked&&Date.now()/1000-Number(status.checked)<21600)return;try{{const r=await fetch('{esc(path)}/update-check',{{method:'POST',body:new URLSearchParams({{csrf:'{esc(csrf)}'}})}});if(!r.ok||r.redirected)return;updateView(await r.json())}}catch(e){{}}}}
 document.getElementById('updateNoticeLater').addEventListener('click',()=>updateDialog.close());updateDialog.addEventListener('close',()=>{{if(updateDialog.dataset.version)dismissUpdate(updateDialog.dataset.version)}});document.getElementById('refreshDashboard').addEventListener('click',refresh);root.addEventListener('click',e=>{{const r=e.target.closest('[data-range]');if(r){{range=Number(r.dataset.range);refresh()}}}});setInterval(refresh,5000);setInterval(updateClock,1000);document.addEventListener('visibilitychange',()=>{{if(!document.hidden)refresh()}});fetch('{esc(path)}/update-status',{{cache:'no-store'}}).then(r=>r.ok&&!r.redirected?r.json():null).then(d=>{{if(d){{updateView(d);automaticUpdateCheck(d)}}}}).catch(()=>automaticUpdateCheck(null));
 </script>'''
+
+
+CSS += '''
+.cascade-card{padding:20px}.cascade-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}.cascade-head h2{font-size:16px;overflow-wrap:anywhere}.cascade-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px}.cascade-endpoint{font:11px ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}.cascade-check{margin-top:12px;font-size:12px;color:var(--muted)}.cascade-latency.ok{color:var(--green)}.cascade-latency.err{color:var(--red)}.cascade-status{min-height:18px;font-size:11px;color:var(--muted);margin:8px 0 0}.cascade-status.err{color:var(--red)}.cascade-users{display:grid;gap:8px;margin:12px 0 16px;max-height:280px;overflow:auto}.cascade-users .check{margin:0}.badge.warn{color:var(--amber)}.badge.warn:before{background:var(--amber)}.cascade-section{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}.cascade-section summary{cursor:pointer;font-size:12px;color:var(--muted)}.cascade-section form{margin-top:12px}.cascade-section details{margin:0}
+'''
+
+CASCADE_JS='''<script>
+(()=>{const PATH=@@PATH@@,CSRF=@@CSRF@@;
+async function post(action,data){
+  const body=new URLSearchParams(data);body.set('csrf',CSRF);
+  const r=await fetch(PATH+'/'+action,{method:'POST',headers:{'X-Onyx-Async':'1'},body});
+  if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');
+  let res;try{res=await r.json()}catch(e){throw new Error('Панель вернула некорректный ответ.')}
+  if(!r.ok||!res.ok)throw new Error(res.message||'Операция не выполнена.');
+  return res;}
+document.querySelectorAll('[data-cascade-ping]').forEach(button=>{
+  button.addEventListener('click',async()=>{
+    if(button.disabled)return;
+    const card=button.closest('[data-cascade]'),out=card.querySelector('[data-check]');
+    const old=button.innerHTML;button.disabled=true;button.textContent='Проверяю…';
+    if(out){out.textContent='Идёт проверка через каскад — это занимает несколько секунд…';out.classList.remove('ok','err')}
+    try{const res=await post('cascade-ping',{id:card.dataset.cascade});
+      if(out){out.textContent=res.message;out.classList.toggle('ok',!!res.ok);out.classList.toggle('err',!res.ok)}}
+    catch(e){if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok')}}
+    finally{button.disabled=false;button.innerHTML=old}});
+});
+document.querySelectorAll('form[data-cascade-toggle]').forEach(form=>{
+  const button=form.querySelector('button');
+  button.addEventListener('click',async()=>{
+    if(button.disabled)return;
+    const previous=button.getAttribute('aria-checked');
+    button.disabled=true;button.setAttribute('aria-checked',previous==='true'?'false':'true');
+    try{await post('cascade-toggle',new URLSearchParams(new FormData(form)));location.reload()}
+    catch(e){button.setAttribute('aria-checked',previous);button.disabled=false;
+      const out=form.closest('[data-cascade]').querySelector('[data-check]');
+      if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok')}}});
+});
+document.querySelectorAll('form[data-cascade-users]').forEach(form=>{
+  const block=form.querySelector('[data-users-block]');
+  const sync=()=>{if(block)block.hidden=form.querySelector('input[name=mode]:checked').value!=='users'};
+  form.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',sync));sync();
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const status=form.querySelector('[data-form-status]'),button=form.querySelector('button.primary');
+    button.disabled=true;status.textContent='Сохраняю…';status.classList.remove('err');
+    /* The backend flattens repeated fields, so selected clients travel as one
+       comma-joined value instead of several "users" checkboxes. */
+    const payload={id:form.querySelector('[name=id]').value,
+      mode:form.querySelector('input[name=mode]:checked').value,
+      users:[...form.querySelectorAll('input[name=users]:checked')].map(c=>c.value).join(',')};
+    try{await post('cascade-users',payload);location.reload()}
+    catch(err){status.textContent=err.message;status.classList.add('err');button.disabled=false}});
+});
+const dialog=document.getElementById('cascadeAdd');
+if(dialog){
+  const open=document.getElementById('addCascade'),form=document.getElementById('cascadeAddForm');
+  if(open)open.addEventListener('click',()=>{form.reset();dialog.showModal();form.querySelector('textarea').focus()});
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const status=form.querySelector('[data-form-status]'),button=form.querySelector('button.primary');
+    button.disabled=true;status.textContent='Проверяю ключ и применяю каскад…';status.classList.remove('err');
+    try{await post('cascade-add',new URLSearchParams(new FormData(form)));location.reload()}
+    catch(err){status.textContent=err.message;status.classList.add('err');button.disabled=false}});
+}})();
+</script>'''
+
+
+def cascade_check_html(item):
+    check=item.get('last_check') or {}
+    when=' · '+time.strftime('%d.%m.%Y %H:%M',time.localtime(check['checked_at'])) if check.get('checked_at') else ''
+    if check.get('ok'):
+        return f'<span class="cascade-latency ok" data-check>Проверка пройдена · {int(check.get("ms",0))} мс{when}</span>'
+    if check.get('message'):
+        return f'<span class="cascade-latency err" data-check>Проверка не прошла: {esc(check.get("message"))}{when}</span>'
+    return '<span class="cascade-latency" data-check>Ещё не проверялся</span>'
+
+
+def cascade_card(item, vless_users, path, csrf):
+    sid=esc(item['id'])
+    enabled=bool(item.get('enabled'))
+    if not enabled: state,state_class='Выключен',''
+    elif item.get('carries'): state,state_class='Передаёт трафик','on'
+    elif item.get('mode')=='all': state,state_class='В резерве','warn'
+    elif not item.get('users'): state,state_class='Клиенты не выбраны',''
+    else: state,state_class='Перекрыт другим каскадом','warn'
+    mode=item.get('mode','all')
+    rows=[]
+    for user in vless_users:
+        uid=str(user['id'])
+        selected=' checked' if uid in (item.get('users') or []) else ''
+        rows.append(f'<label class="check"><input type="checkbox" name="users" value="{esc(uid)}"{selected}>{esc(user.get("name") or uid)}</label>')
+    users_block='<div class="cascade-users" data-users-block>'+''.join(rows)+'</div>' if rows else '<div class="cascade-users" data-users-block><p class="sub">VLESS-клиентов нет. Создайте их в разделе «Пользователи».</p></div>'
+    return f'''<div class="card cascade-card" data-cascade="{sid}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {state_class}">{state}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{str(enabled).lower()}" title="{'Отключить каскад' if enabled else 'Включить каскад'}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{cascade_check_html(item)}</div><details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="checks"><label class="check"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}>Весь VLESS-трафик</label><label class="check"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}>Только выбранные клиенты</label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
+
+
+def cascade_ui(items, users, path, csrf, domain):
+    vless_users=[{'id':user['id'],'name':user.get('name','')} for user in (users or [])
+                 if user.get('protocol')=='vless' and user.get('enabled',True) and isinstance(user.get('id'),str)]
+    cards=''.join(cascade_card(item,vless_users,path,csrf) for item in (items or []))
+    listing=cards if cards else '<section class="card empty">Каскадов нет. Вставьте vless:// ключ клиента верхней панели — трафик этой панели начнёт выходить через неё.</section>'
+    help_note=f'''<details class="note cascade-help"><summary>Как работает каскад</summary><p>Каскад — это аутбаунд Xray: клиенты по-прежнему подключаются к <code>{esc(domain)}</code>, но их VLESS-трафик уходит в интернет через верхнюю панель. Отключение каскада мгновенно возвращает прямое подключение. Hysteria2, AmneziaWG, MTProto и WEB Proxy идут напрямую всегда.</p><p>Режим «Весь VLESS-трафик» перенаправляет всех клиентов, «Только выбранные клиенты» — отмеченных. Если несколько каскадов претендуют на один и тот же трафик, работает тот, что выше в списке, а правило по конкретному клиенту сильнее общего режима.</p><p>Не направляйте две панели друг на друга в режиме «Весь трафик» — получится петля: на ответственной панели включите режим выбранных клиентов и не выбирайте ключ, который обслуживает нижнюю панель. Цепочка из трёх и более панелей собирается сама, если у верхней панели настроен собственный каскад.</p></details>'''
+    add_dialog=f'''<dialog id="cascadeAdd"><div class="dialog-head"><div><h2>Новый каскад</h2><small>Ключ клиента верхней панели</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><form id="cascadeAddForm">{hidden(csrf)}<label for="cascadeLink">vless:// ключ</label><textarea id="cascadeLink" name="link" rows="4" required spellcheck="false" placeholder="vless://…"></textarea><label for="cascadeName">Название — необязательно</label><input id="cascadeName" name="name" maxlength="80" autocomplete="off" placeholder="Из метки ключа или адрес сервера"><p class="note">Скопируйте ключ в разделе «Пользователи» верхней панели Onyx или в любой другой Xray-панели. Понимаются транспорты TCP, WebSocket, gRPC, XHTTP, HTTPUpgrade и HTTP/2, защита TLS и Reality. После добавления каскад сразу включается в режиме «Весь VLESS-трафик» и проверяется живым запросом.</p><p class="cascade-status" data-form-status role="status"></p><div class="actions create-actions"><button type="button" data-close-dialog>Отмена</button><button class="primary">Проверить и добавить</button></div></form></dialog>'''
+    return f'''<div class="page-head"><div><h1>Каскад</h1><p>Выпуск трафика через другие панели</p></div><div class="actions"><button class="primary" id="addCascade">＋ Добавить каскад</button></div></div>{help_note}{listing}{add_dialog}{CASCADE_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',json.dumps(csrf))}'''
 
 
 def updates_ui(path, csrf, current):

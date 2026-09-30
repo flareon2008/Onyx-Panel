@@ -15,7 +15,7 @@ REPOSITORY="${ONYX_UPDATE_REPOSITORY:-https://github.com/flareon2008/Onyx-Panel.
 REQUESTED_REF="${ONYX_PANEL_REF:-}"
 RELEASE_REF="$REQUESTED_REF"
 LOCAL_SOURCE=""
-LOCAL_VERSION="1.2.10"
+LOCAL_VERSION="1.3.0"
 # `--local` is accepted for compatibility and behaves the same as the default.
 LOCAL_SOURCE="$(cd "$(dirname "$0")" && pwd)"
 # Invoked as the installed /usr/local/sbin/onyx-panel-update, the script's own
@@ -23,7 +23,7 @@ LOCAL_SOURCE="$(cd "$(dirname "$0")" && pwd)"
 if [[ ! -s "$LOCAL_SOURCE/install-final.sh" && -d /opt/onyx-panel-package ]]; then
     LOCAL_SOURCE="/opt/onyx-panel-package"
 fi
-for file in install-final.sh install-panel.sh install-core.sh uninstall-onyx-panel.sh repair-landing-pages.sh onyx-logo.png onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py; do
+for file in install-final.sh install-panel.sh install-core.sh uninstall-onyx-panel.sh repair-landing-pages.sh onyx-logo.png onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py; do
     [[ -s "$LOCAL_SOURCE/$file" ]] || { echo "Incomplete local archive: $file is missing." >&2; exit 1; }
 done
 [[ -s "$LOCAL_SOURCE/assets/OpenFlux-linux-amd64" || -s "$LOCAL_SOURCE/OpenFlux-linux-amd64" ]] || {
@@ -50,7 +50,7 @@ exec 9>/run/lock/onyx-panel.lock
 flock -n 9 || die "Another Onyx Panel install, update or removal is already running."
 
 echo "============================================================"
-echo "     Onyx Panel 1.2.10 — SAFE UPDATE"
+echo "     Onyx Panel 1.3.0 — SAFE UPDATE"
 echo "============================================================"
 echo "Users, administrator password, panel URL and site HTML will be retained."
 

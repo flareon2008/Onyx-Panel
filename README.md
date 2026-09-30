@@ -4,10 +4,10 @@
 
 <h1 align="center">Onyx Panel</h1>
 
-<p align="center"><b>Панель управления VPN на своём VPS:</b> VLESS XHTTP, Hysteria2, AmneziaWG 2.0/3.1, MTProto, Telegram Web Proxy и OpenFlux — в одном интерфейсе.</p>
+<p align="center"><b>Панель управления VPN на своём VPS:</b> VLESS XHTTP, Hysteria2, AmneziaWG 2.0/3.1, MTProto, Telegram Web Proxy, OpenFlux и каскады панелей — в одном интерфейсе.</p>
 
 <p align="center">
-  <a href="https://github.com/flareon2008/Onyx-Panel/releases"><img alt="Версия" src="https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.2.10-65a8dc"></a>
+  <a href="https://github.com/flareon2008/Onyx-Panel/releases"><img alt="Версия" src="https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.3.0-65a8dc"></a>
   <a href="LICENSE"><img alt="Лицензия" src="https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-58c392"></a>
   <img alt="Платформа" src="https://img.shields.io/badge/Ubuntu%2022.04%2B%20%7C%20Debian%2012%2B-x86__64-8a97ab">
 </p>
@@ -37,6 +37,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/flareon2008/Onyx-Panel/main/
 - **OpenFlux** — экспериментальный туннель через публичные документы Яндекса и Mail.ru (iOS/Android).
 - **Лимиты и срок доступа** — ограничение устройств по HWID и автоматическое отключение по дате.
 - **Ноды** — объединение нескольких VPS в одну подписку через Node API token.
+- **Каскад** — вставьте vless:// ключ клиента верхней панели, и трафик VLESS-клиентов этой панели выйдет в интернет через неё: проверка задержки, включение/отключение и выбор клиентов на каждый каскад.
 - **HTML-заглушки** — редактор главной страницы с изолированным предпросмотром и пресетами.
 - **Обновления и резервные копии** — установка и откат версий панели и компонентов одним нажатием, архив всех настроек.
 

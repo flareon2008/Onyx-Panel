@@ -112,7 +112,7 @@ fi
 MTPROTO_HOST="${MTPROTO_HOST:-$DOMAIN}"
 [[ -s "$PRIMARY_SECRET" ]] || die "Primary install-time secret not found."
 [[ -s "$LOGO_SOURCE" ]] || die "Panel logo file is missing: onyx-logo.png"
-for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py; do
+for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py; do
     [[ -s "$BASE/$module" ]] || die "Missing panel module: $module; extract the complete archive."
 done
 FLAG_ARCHIVE="$BASE/onyx-panel/flags.tar.gz"
@@ -419,9 +419,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.2.10..."
+    echo "Updating Onyx Panel 1.3.0..."
 else
-    echo "Configuring Onyx Panel 1.2.10..."
+    echo "Configuring Onyx Panel 1.3.0..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -454,7 +454,7 @@ fi
 
 echo "[1/6] Writing manager..."
 
-for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py; do
+for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py; do
     [[ -s "$BASE/$module" ]] || die "Package is incomplete: $module is missing."
     install -o root -g root -m 0644 "$BASE/$module" "$APP_DIR/$module"
 done
@@ -507,6 +507,7 @@ sys.path.insert(0,"/opt/onyx-panel")
 from onyx_subscriptions import mutate as mutate_subscription, issue as issue_subscription, SubscriptionError
 import onyx_awg
 import onyx_firewall
+import onyx_cascade
 
 USERS="/etc/onyx-panel/users.json"
 PROFILES="/etc/tproxy-server/profiles.json"
@@ -530,6 +531,7 @@ HYSTERIA_PORT=8443
 CADDYFILE="/etc/caddy/Caddyfile"
 TRAFFIC_FILE="/var/lib/onyx-panel/traffic.json"
 TRAFFIC_LOCK="/var/lib/onyx-panel/traffic.lock"
+CASCADES_FILE="/var/lib/onyx-panel/cascades.json"
 UFW_HYSTERIA_MARKER="/etc/onyx-panel/hysteria-ufw-owned"
 UFW_MTPROTO_MARKER="/etc/onyx-panel/mtproto-ufw-owned"
 UFW_AWG_MARKER="/etc/onyx-panel/awg-ufw-owned"
@@ -823,6 +825,13 @@ def sync_xray(d):
         "inbounds":inbounds,
         "outbounds":[{"tag":"direct","protocol":"freedom"}]
     }
+    # Cascade outbounds extend the direct default; an empty or damaged registry
+    # yields exactly today's config because xray_additions returns nothing.
+    cascade_outbounds,cascade_rules=onyx_cascade.xray_additions(
+        onyx_cascade.load_cascades(CASCADES_FILE),d.get("users",[]))
+    if cascade_outbounds:
+        config["outbounds"]+=cascade_outbounds
+        if cascade_rules: config["routing"]={"rules":cascade_rules}
     # Xray selects the configuration parser from the final extension.  A name
     # such as config.json.tmp is rejected before JSON parsing, so keep .json
     # as the temporary file's last suffix.
@@ -1373,13 +1382,29 @@ elif cmd=="rename-user":
     edit_user(sys.argv[2],name=sys.argv[3])
     print(json.dumps({'ok':True}))
 elif cmd=="set-secret": set_secret(json.load(sys.stdin))
+elif cmd=="cascade-apply":
+    # Cascades must never leave the panel without a working Xray, even when a
+    # pasted upstream key turns out to be broken: restore the previous
+    # generated config and restart if the new one fails.
+    old_xray=None
+    if os.path.exists(XRAY_CONFIG):
+        with open(XRAY_CONFIG,encoding="utf-8") as f: old_xray=f.read()
+    try:
+        sync_xray(load())
+        print(json.dumps({"ok":True}))
+    except Exception:
+        if old_xray is not None:
+            with open(XRAY_CONFIG,"w",encoding="utf-8") as f: f.write(old_xray)
+            os.chmod(XRAY_CONFIG,0o640)
+            run("systemctl","restart",XRAY_SERVICE,check=False)
+        raise
 elif cmd=="sync": apply(load(),True)
 elif cmd=="firewall": sync_firewall(load())
 elif cmd=="traffic":
     traffic_state=collect_traffic()
     print(json.dumps(traffic_state,ensure_ascii=True))
 elif cmd=="users": print(json.dumps(load(),ensure_ascii=True))
-else: raise SystemExit("usage: init|add|delete|set-user|rename-user|set-secret|sync|firewall|traffic|users")
+else: raise SystemExit("usage: init|add|delete|set-user|rename-user|set-secret|sync|firewall|traffic|users|cascade-apply")
 
 PY
 
@@ -1657,13 +1682,14 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 from collections import defaultdict, deque
 from onyx_subscriptions import PREFIX as SUB_PREFIX
 from onyx_panel_extras import preview_document
-from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, openflux_ui, client_records, nodes_ui, updates_ui, icon
+from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, openflux_ui, client_records, nodes_ui, cascade_ui, updates_ui, icon
 import onyx_metrics as server_metrics
 import onyx_update as web_updates
 import onyx_components as components
 import onyx_nodes as node_api
 import onyx_openflux as openflux
 import onyx_awg as awg
+import onyx_cascade as cascade_api
 
 HOST="127.0.0.1"
 PORT=8090
@@ -1696,6 +1722,7 @@ CUSTOM_PRESETS_FILE="/var/lib/onyx-panel/custom-presets.json"
 API_KEY_FILE="/var/lib/onyx-panel/api.key"
 NODES_FILE="/var/lib/onyx-panel/nodes.json"
 LOCATION_FILE="/var/lib/onyx-panel/location.json"
+CASCADES_FILE="/var/lib/onyx-panel/cascades.json"
 API_KEY=node_api.ensure_api_key(API_KEY_FILE)
 SUB_FETCH_SLOTS=threading.BoundedSemaphore(4)
 SUB_RATE_LOCK=threading.Lock()
@@ -2227,7 +2254,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.2.10","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.3.0","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2366,6 +2393,14 @@ class Handler(BaseHTTPRequestHandler):
             body=nodes_ui([node_api.public_node(n) for n in node_api.load_nodes(NODES_FILE)],
                           node_api.load_location(LOCATION_FILE),node_api.make_connection_token(DOMAIN,API_KEY),PANEL_PATH,self.csrf())
             self.send_html(layout("Ноды",body,"nodes")); return
+        if path==PANEL_PATH+"/cascade":
+            cascade_records=cascade_api.load_cascades(CASCADES_FILE)
+            panel_users=users()
+            _,_,cascade_carriers=cascade_api.route_assignment(cascade_records,panel_users)
+            items=[dict(item,transport=cascade_api.transport_label(item),
+                        carries=cascade_carriers.get(item["id"],False)) for item in cascade_records]
+            body=cascade_ui(items,panel_users,PANEL_PATH,self.csrf(),DOMAIN)
+            self.send_html(layout("Каскад",body,"cascade")); return
         if path==PANEL_PATH+"/updates":
             self.send_html(layout("Обновления",updates_ui(PANEL_PATH,self.csrf(),web_updates.current_version()),"updates")); return
         if path==PANEL_PATH+"/subscriptions":
@@ -2962,6 +2997,84 @@ if(compGrid){
                 self.send_html("Не удалось применить пресет. Предыдущая страница сохранена; проверьте службы через SSH.",503)
             return
 
+        if path in (PANEL_PATH+"/cascade-add",PANEL_PATH+"/cascade-toggle",PANEL_PATH+"/cascade-delete",PANEL_PATH+"/cascade-users",PANEL_PATH+"/cascade-ping"):
+            async_action=self.headers.get("X-Onyx-Async","")=="1"
+            def cascade_fail(message,status=400):
+                if async_action: self.send_json({"ok":False,"message":message},status)
+                else: self.send_html(esc(message),status)
+            def cascade_ok(payload=None):
+                if async_action: self.send_json(payload if payload else {"ok":True})
+                else: self.redirect("/cascade")
+            def apply_cascades():
+                try: ctl("cascade-apply")
+                except RuntimeError as exc:
+                    lines=[line.strip() for line in str(exc).strip().splitlines() if line.strip()]
+                    detail=lines[-1].replace("RuntimeError: ","") if lines else ""
+                    raise RuntimeError(detail or "менеджер не смог обновить конфигурацию Xray")
+            try:
+                if path==PANEL_PATH+"/cascade-add":
+                    with STATE_LOCK:
+                        record=cascade_api.prepare(form.get("link",""),form.get("name",""),DOMAIN,cascade_api.load_cascades(CASCADES_FILE))
+                    # The probe runs outside the state lock: a slow upstream
+                    # must not stall other panel writes.
+                    check=cascade_api.ping(record)
+                    record["last_check"]=check
+                    # A dead upstream key must never take live traffic down:
+                    # store the cascade disabled until the admin verifies it.
+                    record["enabled"]=bool(check.get("ok"))
+                    snapshot=json.dumps(cascade_api.load_cascades(CASCADES_FILE))
+                    with STATE_LOCK:
+                        cascades=cascade_api.load_cascades(CASCADES_FILE)
+                        cascades.append(record)
+                        cascade_api.save_cascades(CASCADES_FILE,cascades)
+                    try: apply_cascades()
+                    except Exception:
+                        cascade_api.save_cascades(CASCADES_FILE,json.loads(snapshot)); raise
+                    if check.get("ok"):
+                        cascade_ok({"ok":True,"message":"Каскад добавлен и включён — проверка %d мс."%int(check.get("ms",0)),"check":check})
+                    else:
+                        cascade_ok({"ok":True,"message":"Каскад добавлен выключенным: проверка не прошла ("+str(check.get("message"))+"). Проверьте ключ и включите каскад вручную.","check":check})
+                elif path==PANEL_PATH+"/cascade-ping":
+                    uid=form.get("id","")
+                    record=next((c for c in cascade_api.load_cascades(CASCADES_FILE) if c.get("id")==uid),None)
+                    if record is None: raise cascade_api.CascadeError("Каскад не найден.")
+                    check=cascade_api.ping(record)
+                    with STATE_LOCK:
+                        cascades=cascade_api.load_cascades(CASCADES_FILE)
+                        for item in cascades:
+                            if item.get("id")==uid: item["last_check"]=check
+                        cascade_api.save_cascades(CASCADES_FILE,cascades)
+                    cascade_ok({"ok":True,"message":("Проверка пройдена · %d мс"%int(check.get("ms",0))) if check.get("ok") else str(check.get("message") or "Проверка не прошла."),"check":check})
+                else:
+                    with STATE_LOCK:
+                        cascades=cascade_api.load_cascades(CASCADES_FILE)
+                        record=next((c for c in cascades if c.get("id")==form.get("id","")),None)
+                        if record is None: raise cascade_api.CascadeError("Каскад не найден.")
+                        if path==PANEL_PATH+"/cascade-toggle":
+                            if form.get("operation","") not in ("enable","disable"): raise cascade_api.CascadeError("Неизвестное действие.")
+                            record["enabled"]=form.get("operation")=="enable"
+                        elif path==PANEL_PATH+"/cascade-delete":
+                            cascades.remove(record)
+                        elif path==PANEL_PATH+"/cascade-users":
+                            if form.get("mode","") not in ("all","users"): raise cascade_api.CascadeError("Неизвестный режим каскада.")
+                            record["mode"]=form.get("mode")
+                            record["users"]=[value for value in form.get("users","").split(",") if re.fullmatch(r"[a-f0-9]{16}",value)]
+                        snapshot=json.dumps(cascades)
+                        cascade_api.save_cascades(CASCADES_FILE,cascades)
+                    try: apply_cascades()
+                    except Exception:
+                        cascade_api.save_cascades(CASCADES_FILE,json.loads(snapshot)); raise
+                    cascade_ok()
+            except cascade_api.CascadeError as exc:
+                cascade_fail(str(exc))
+            except RuntimeError as exc:
+                print("cascade apply failed:",str(exc)[-500:],file=sys.stderr,flush=True)
+                cascade_fail("Не удалось применить конфигурацию каскада: "+str(exc),503)
+            except (OSError,subprocess.TimeoutExpired) as exc:
+                print("cascade operation failed:",type(exc).__name__,file=sys.stderr,flush=True)
+                cascade_fail("Операция не выполнена. Проверьте службы панели и повторите попытку.",503)
+            return
+
         if path==PANEL_PATH+"/import":
             import io, tarfile
             async_action=self.headers.get("X-Onyx-Async","")=="1"
@@ -3228,6 +3341,7 @@ BACKUP_FILES=(
     ("panel/data.json","/var/lib/onyx-panel/data.json",True),
     ("panel/site-draft.html","/var/lib/onyx-panel/site-draft.html",False),
     ("panel/custom-presets.json","/var/lib/onyx-panel/custom-presets.json",False),
+    ("panel/cascades.json","/var/lib/onyx-panel/cascades.json",False),
     ("panel/location.json","/var/lib/onyx-panel/location.json",False),
     ("panel/api.key","/var/lib/onyx-panel/api.key",False),
     ("onyx-panel/users.json","/etc/onyx-panel/users.json",True),
@@ -3367,7 +3481,7 @@ PY
 fi
 
 python3 -m py_compile "$APP_FILE"
-python3 -m py_compile "$APP_DIR/onyx_subscriptions.py" "$APP_DIR/onyx_panel_extras.py" "$APP_DIR/onyx_ui.py" "$APP_DIR/onyx_metrics.py" "$APP_DIR/onyx_update.py" "$APP_DIR/onyx_nodes.py" "$APP_DIR/onyx_openflux.py" "$APP_DIR/onyx_awg.py" "$APP_DIR/onyx_firewall.py" "$APP_DIR/onyx_components.py"
+python3 -m py_compile "$APP_DIR/onyx_subscriptions.py" "$APP_DIR/onyx_panel_extras.py" "$APP_DIR/onyx_ui.py" "$APP_DIR/onyx_metrics.py" "$APP_DIR/onyx_update.py" "$APP_DIR/onyx_nodes.py" "$APP_DIR/onyx_openflux.py" "$APP_DIR/onyx_awg.py" "$APP_DIR/onyx_firewall.py" "$APP_DIR/onyx_components.py" "$APP_DIR/onyx_cascade.py"
 
 
 # ---- Finish installation: service, Caddy route, permissions, start ----
@@ -3407,7 +3521,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.2.10
+Description=Onyx Panel 1.3.0
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -3963,9 +4077,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.2.10 UPDATED"
+echo "          Onyx Panel 1.3.0 UPDATED"
 else
-echo "         Onyx Panel 1.2.10 IS READY"
+echo "         Onyx Panel 1.3.0 IS READY"
 fi
 echo "============================================================"
 echo
