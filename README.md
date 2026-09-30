@@ -32,8 +32,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/flareon2008/Onyx-Panel/main/
 | **Дашборд** — ресурсы VPS, график трафика, состояние служб | **Клиенты** — подписки и отдельные подключения, HWID-лимиты, срок доступа |
 | ![Диалог создания](docs/screenshots/client-create.png) | ![Календарь](docs/screenshots/calendar.png) |
 | **Новый доступ** — подписка или один сервис: MTProto, Web Proxy, OpenFlux | **Дата окончания** — тематический календарь с кнопкой «Без даты окончания» |
-| ![Обновления](docs/screenshots/updates.png) | ![Настройки](docs/screenshots/settings.png) |
-| **Обновления** — панель и компоненты с резервными копиями и откатом | **Настройки** — адрес входа, учётные данные, копии в два клика |
+| ![Обновления](docs/screenshots/updates.png) |
+| **Обновления** — панель и компоненты с резервными копиями и откатом |
 
 <p align="center">
   <img src="docs/screenshots/clients-mobile.png" alt="Мобильный вид" width="280">
