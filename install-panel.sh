@@ -419,9 +419,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.3.1..."
+    echo "Updating Onyx Panel 1.3.2..."
 else
-    echo "Configuring Onyx Panel 1.3.1..."
+    echo "Configuring Onyx Panel 1.3.2..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -1738,6 +1738,9 @@ if not os.path.exists(KEY):
 with open(KEY,"rb") as f: SESSION_KEY=f.read()
 os.chmod(KEY,0o600)
 STATE_LOCK=threading.RLock()
+# Cascade background jobs serialize on this lock: the manager holds its own
+# exclusive lock during the Xray restart, so parallel jobs would just queue.
+APPLY_LOCK=threading.Lock()
 LOGIN_LOCK=threading.RLock()
 LOGIN_FAILURES=defaultdict(deque)
 LOGIN_FAILURES_GLOBAL=deque()
@@ -2086,6 +2089,56 @@ def ctl(*args):
     r=subprocess.run([MANAGER,*args],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=60)
     if r.returncode: raise RuntimeError(r.stderr.strip() or "manager failed")
     return json.loads(r.stdout) if r.stdout.strip() else None
+
+def cascade_detail(exc):
+    """Last meaningful line of the manager traceback for the operator."""
+    lines=[line.strip() for line in str(exc).strip().splitlines() if line.strip()]
+    return (lines[-1].replace("RuntimeError: ","") if lines else "") or str(exc) or "ошибка применения конфигурации"
+
+def cascade_touch(uid=None,check=None,pending=None,op_error=None):
+    """Update background-job bookkeeping fields on one or all cascades."""
+    with STATE_LOCK:
+        cascades=cascade_api.load_cascades(CASCADES_FILE)
+        for c in cascades:
+            if uid is not None and c.get("id")!=uid: continue
+            if check is not None: c["last_check"]=check
+            if pending is not None: c["pending"]=pending
+            if op_error is not None: c["op_error"]=op_error
+        cascade_api.save_cascades(CASCADES_FILE,cascades)
+
+def cascade_apply_bg(uid,snapshot):
+    """Apply cascade routing in the background; roll the file back on failure.
+
+    Every cascade operation answers immediately and runs the Xray restart
+    here: a synchronous apply took 15-25 s and proxies cut the connection
+    before the panel could answer, which surfaced as random errors.
+    """
+    def worker():
+        with APPLY_LOCK:
+            try:
+                ctl("cascade-apply")
+                cascade_touch(uid,pending=False,op_error="")
+            except Exception as exc:
+                detail=cascade_detail(exc)
+                print("cascade apply failed:",detail[-500:],file=sys.stderr,flush=True)
+                if snapshot is not None:
+                    try: cascade_api.save_cascades(CASCADES_FILE,json.loads(snapshot))
+                    except Exception: pass
+                cascade_touch(uid,pending=False,op_error=detail)
+    threading.Thread(target=worker,daemon=True).start()
+
+def cascade_ping_bg(uid):
+    def worker():
+        with APPLY_LOCK:
+            try:
+                record=next((c for c in cascade_api.load_cascades(CASCADES_FILE) if c.get("id")==uid),None)
+                if record is None: return
+                check=cascade_api.ping(record)
+                cascade_touch(uid,check=check,pending=False)
+            except Exception as exc:
+                cascade_touch(uid,pending=False,op_error=cascade_detail(exc))
+    threading.Thread(target=worker,daemon=True).start()
+
 def subscription_registry():
     try:
         with open(USERS,encoding="utf-8") as f:
@@ -2254,7 +2307,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.3.1","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.3.2","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2401,6 +2454,14 @@ class Handler(BaseHTTPRequestHandler):
                         carries=cascade_carriers.get(item["id"],False)) for item in cascade_records]
             body=cascade_ui(items,panel_users,PANEL_PATH,self.csrf(),DOMAIN)
             self.send_html(layout("Каскад",body,"cascade")); return
+        if path==PANEL_PATH+"/cascade-state":
+            cascade_records=cascade_api.load_cascades(CASCADES_FILE)
+            _,_,cascade_carriers=cascade_api.route_assignment(cascade_records,users())
+            self.send_json({"ok":True,"cascades":[
+                {"id":c["id"],"enabled":c["enabled"],"mode":c["mode"],
+                 "pending":bool(c.get("pending")),"op_error":c.get("op_error") or "",
+                 "carries":cascade_carriers.get(c["id"],False),
+                 "last_check":c.get("last_check")} for c in cascade_records]}); return
         if path==PANEL_PATH+"/updates":
             self.send_html(layout("Обновления",updates_ui(PANEL_PATH,self.csrf(),web_updates.current_version()),"updates")); return
         if path==PANEL_PATH+"/subscriptions":
@@ -3005,71 +3066,82 @@ if(compGrid){
             def cascade_ok(payload=None):
                 if async_action: self.send_json(payload if payload else {"ok":True})
                 else: self.redirect("/cascade")
-            def apply_cascades():
-                try: ctl("cascade-apply")
-                except RuntimeError as exc:
-                    lines=[line.strip() for line in str(exc).strip().splitlines() if line.strip()]
-                    detail=lines[-1].replace("RuntimeError: ","") if lines else ""
-                    raise RuntimeError(detail or "менеджер не смог обновить конфигурацию Xray")
             try:
                 if path==PANEL_PATH+"/cascade-add":
+                    # Parsing is instant; the reachability probe and the Xray
+                    # restart run in the background while the page polls
+                    # /cascade-state. A synchronous add took 15-25 s and
+                    # proxies cut the connection mid-flight, surfacing as
+                    # random errors even though the operation had succeeded.
                     with STATE_LOCK:
                         record=cascade_api.prepare(form.get("link",""),form.get("name",""),DOMAIN,cascade_api.load_cascades(CASCADES_FILE))
-                    # The probe runs outside the state lock: a slow upstream
-                    # must not stall other panel writes.
-                    check=cascade_api.ping(record)
-                    record["last_check"]=check
-                    # A dead upstream key must never take live traffic down:
-                    # store the cascade disabled until the admin verifies it.
-                    record["enabled"]=bool(check.get("ok"))
-                    snapshot=json.dumps(cascade_api.load_cascades(CASCADES_FILE))
-                    with STATE_LOCK:
+                        record["enabled"]=False
+                        record["pending"]=True
+                        record["op_error"]=""
                         cascades=cascade_api.load_cascades(CASCADES_FILE)
                         cascades.append(record)
                         cascade_api.save_cascades(CASCADES_FILE,cascades)
-                    try: apply_cascades()
-                    except Exception:
-                        cascade_api.save_cascades(CASCADES_FILE,json.loads(snapshot)); raise
-                    if check.get("ok"):
-                        cascade_ok({"ok":True,"message":"Каскад добавлен и включён — проверка %d мс."%int(check.get("ms",0)),"check":check})
-                    else:
-                        cascade_ok({"ok":True,"message":"Каскад добавлен выключенным: проверка не прошла ("+str(check.get("message"))+"). Проверьте ключ и включите каскад вручную.","check":check})
+                    uid=record["id"]
+                    def add_job(uid=uid):
+                        with APPLY_LOCK:
+                            try:
+                                live=next((c for c in cascade_api.load_cascades(CASCADES_FILE) if c.get("id")==uid),None)
+                                if live is None: return
+                                check=cascade_api.ping(live)
+                                snapshot=json.dumps(cascade_api.load_cascades(CASCADES_FILE))
+                                cascade_touch(uid,check=check,pending=True)
+                                live=next((c for c in cascade_api.load_cascades(CASCADES_FILE) if c.get("id")==uid),None)
+                                if live is None: return
+                                # A dead upstream key must never take live
+                                # traffic down: stay disabled on a failed probe.
+                                live["enabled"]=bool(check.get("ok"))
+                                with STATE_LOCK:
+                                    cascades=cascade_api.load_cascades(CASCADES_FILE)
+                                    for i,c in enumerate(cascades):
+                                        if c.get("id")==uid: cascades[i]=live
+                                    cascade_api.save_cascades(CASCADES_FILE,cascades)
+                                try:
+                                    ctl("cascade-apply")
+                                    cascade_touch(uid,pending=False,op_error="")
+                                except Exception as exc:
+                                    cascade_api.save_cascades(CASCADES_FILE,json.loads(snapshot))
+                                    cascade_touch(uid,pending=False,op_error=cascade_detail(exc))
+                            except Exception as exc:
+                                cascade_touch(uid,pending=False,op_error=cascade_detail(exc))
+                    threading.Thread(target=add_job,daemon=True).start()
+                    cascade_ok({"ok":True,"message":"Каскад добавлен. Идёт проверка ключа и включение — статус появится в карточке."})
                 elif path==PANEL_PATH+"/cascade-ping":
                     uid=form.get("id","")
-                    record=next((c for c in cascade_api.load_cascades(CASCADES_FILE) if c.get("id")==uid),None)
-                    if record is None: raise cascade_api.CascadeError("Каскад не найден.")
-                    check=cascade_api.ping(record)
-                    with STATE_LOCK:
-                        cascades=cascade_api.load_cascades(CASCADES_FILE)
-                        for item in cascades:
-                            if item.get("id")==uid: item["last_check"]=check
-                        cascade_api.save_cascades(CASCADES_FILE,cascades)
-                    cascade_ok({"ok":True,"message":("Проверка пройдена · %d мс"%int(check.get("ms",0))) if check.get("ok") else str(check.get("message") or "Проверка не прошла."),"check":check})
+                    if next((c for c in cascade_api.load_cascades(CASCADES_FILE) if c.get("id")==uid),None) is None:
+                        raise cascade_api.CascadeError("Каскад не найден.")
+                    cascade_touch(uid,pending=True,op_error="")
+                    cascade_ping_bg(uid)
+                    cascade_ok({"ok":True,"message":"Проверка запущена."})
                 else:
                     with STATE_LOCK:
                         cascades=cascade_api.load_cascades(CASCADES_FILE)
                         record=next((c for c in cascades if c.get("id")==form.get("id","")),None)
                         if record is None: raise cascade_api.CascadeError("Каскад не найден.")
+                        uid=record["id"]
                         if path==PANEL_PATH+"/cascade-toggle":
                             if form.get("operation","") not in ("enable","disable"): raise cascade_api.CascadeError("Неизвестное действие.")
                             record["enabled"]=form.get("operation")=="enable"
+                            record["pending"]=True
+                            record["op_error"]=""
                         elif path==PANEL_PATH+"/cascade-delete":
                             cascades.remove(record)
                         elif path==PANEL_PATH+"/cascade-users":
                             if form.get("mode","") not in ("all","users"): raise cascade_api.CascadeError("Неизвестный режим каскада.")
                             record["mode"]=form.get("mode")
                             record["users"]=[value for value in form.get("users","").split(",") if re.fullmatch(r"[a-f0-9]{16}",value)]
+                            record["pending"]=True
+                            record["op_error"]=""
                         snapshot=json.dumps(cascades)
                         cascade_api.save_cascades(CASCADES_FILE,cascades)
-                    try: apply_cascades()
-                    except Exception:
-                        cascade_api.save_cascades(CASCADES_FILE,json.loads(snapshot)); raise
+                    cascade_apply_bg(uid,snapshot)
                     cascade_ok()
             except cascade_api.CascadeError as exc:
                 cascade_fail(str(exc))
-            except RuntimeError as exc:
-                print("cascade apply failed:",str(exc)[-500:],file=sys.stderr,flush=True)
-                cascade_fail("Не удалось применить конфигурацию каскада: "+str(exc),503)
             except (OSError,subprocess.TimeoutExpired) as exc:
                 print("cascade operation failed:",type(exc).__name__,file=sys.stderr,flush=True)
                 cascade_fail("Операция не выполнена. Проверьте службы панели и повторите попытку.",503)
@@ -3521,7 +3593,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.3.1
+Description=Onyx Panel 1.3.2
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4077,9 +4149,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.3.1 UPDATED"
+echo "          Onyx Panel 1.3.2 UPDATED"
 else
-echo "         Onyx Panel 1.3.1 IS READY"
+echo "         Onyx Panel 1.3.2 IS READY"
 fi
 echo "============================================================"
 echo

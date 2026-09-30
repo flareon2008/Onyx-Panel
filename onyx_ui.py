@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.3.1'
+VERSION = '1.3.2'
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -1109,16 +1109,31 @@ async function post(action,data){
   let res;try{res=await r.json()}catch(e){throw new Error('Панель вернула некорректный ответ.')}
   if(!r.ok||!res.ok)throw new Error(res.message||'Операция не выполнена.');
   return res;}
+/* Long work (probe + Xray restart) runs in the background on the server.
+   While any card is pending, poll the state and reload once it settles. */
+let polling=false;
+function ensurePoll(){
+  if(polling)return;polling=true;
+  let tries=0;
+  const timer=setInterval(async()=>{
+    tries++;
+    if(tries>60){clearInterval(timer);polling=false;return}
+    try{const r=await fetch(PATH+'/cascade-state',{cache:'no-store'});
+      if(!r.ok||r.redirected)return;
+      const d=await r.json();
+      if(!(d.cascades||[]).some(c=>c.pending)){clearInterval(timer);polling=false;location.reload()}}
+    catch(e){}});
+}
+if(document.querySelector('[data-pending="1"]'))ensurePoll();
 document.querySelectorAll('[data-cascade-ping]').forEach(button=>{
   button.addEventListener('click',async()=>{
     if(button.disabled)return;
     const card=button.closest('[data-cascade]'),out=card.querySelector('[data-check]');
     const old=button.innerHTML;button.disabled=true;button.textContent='Проверяю…';
-    if(out){out.textContent='Идёт проверка через каскад — это занимает несколько секунд…';out.classList.remove('ok','err')}
-    try{const res=await post('cascade-ping',{id:card.dataset.cascade});
-      if(out){out.textContent=res.message;out.classList.toggle('ok',!!res.ok);out.classList.toggle('err',!res.ok)}}
-    catch(e){if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok')}}
-    finally{button.disabled=false;button.innerHTML=old}});
+    if(out){out.textContent='Проверка выполняется — страница обновится с результатом…';out.classList.remove('ok','err')}
+    try{await post('cascade-ping',{id:card.dataset.cascade});ensurePoll()}
+    catch(e){if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok');button.disabled=false;button.innerHTML=old}}
+    if(!out||!out.classList.contains('err')){button.disabled=false;button.innerHTML=old}});
 });
 document.querySelectorAll('form[data-cascade-toggle]').forEach(form=>{
   const button=form.querySelector('button');
@@ -1126,7 +1141,7 @@ document.querySelectorAll('form[data-cascade-toggle]').forEach(form=>{
     if(button.disabled)return;
     const previous=button.getAttribute('aria-checked');
     button.disabled=true;button.setAttribute('aria-checked',previous==='true'?'false':'true');
-    try{await post('cascade-toggle',new URLSearchParams(new FormData(form)));location.reload()}
+    try{await post('cascade-toggle',new URLSearchParams(new FormData(form)));ensurePoll()}
     catch(e){button.setAttribute('aria-checked',previous);button.disabled=false;
       const out=form.closest('[data-cascade]').querySelector('[data-check]');
       if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok')}}});
@@ -1144,13 +1159,13 @@ document.querySelectorAll('form[data-cascade-users]').forEach(form=>{
   form.addEventListener('submit',async e=>{
     e.preventDefault();
     const status=form.querySelector('[data-form-status]'),button=form.querySelector('button.primary');
-    button.disabled=true;status.textContent='Сохраняю…';status.classList.remove('err');
+    button.disabled=true;status.textContent='Сохраняю — применение в фоне, страница обновится…';status.classList.remove('err');
     /* The backend flattens repeated fields, so selected clients travel as one
        comma-joined value instead of several "users" checkboxes. */
     const payload={id:form.querySelector('[name=id]').value,
       mode:form.querySelector('input[name=mode]:checked').value,
       users:boxes.filter(b=>b.checked).map(b=>b.value).join(',')};
-    try{await post('cascade-users',payload);location.reload()}
+    try{await post('cascade-users',payload);ensurePoll()}
     catch(err){status.textContent=err.message;status.classList.add('err');button.disabled=false}});
 });
 const dialog=document.getElementById('cascadeAdd');
@@ -1180,11 +1195,18 @@ def cascade_check_html(item):
 def cascade_card(item, vless_users, path, csrf):
     sid=esc(item['id'])
     enabled=bool(item.get('enabled'))
+    pending=bool(item.get('pending'))
+    op_error=str(item.get('op_error') or '')
     if not enabled: state,state_class='Выключен',''
     elif item.get('carries'): state,state_class='Передаёт трафик','on'
     elif item.get('mode')=='all': state,state_class='В резерве','warn'
     elif not item.get('users'): state,state_class='Клиенты не выбраны',''
     else: state,state_class='Перекрыт другим каскадом','warn'
+    job_line=''
+    if pending:
+        job_line='<div class="cascade-check"><span class="cascade-latency" data-job>Выполняется: проверка и применение конфигурации — страница обновится сама…</span></div>'
+    elif op_error:
+        job_line=f'<div class="cascade-check"><span class="cascade-latency err" data-job>Не удалось применить: {esc(op_error)}</span></div>'
     mode=item.get('mode','all')
     rows=[]
     for user in vless_users:
@@ -1200,7 +1222,7 @@ def cascade_card(item, vless_users, path, csrf):
                      '<div class="cascade-clients-grid">'+''.join(rows)+'</div></div>')
     else:
         users_block='<div class="cascade-clients" data-users-block><p class="sub">VLESS-клиентов нет. Создайте их в разделе «Пользователи».</p></div>'
-    return f'''<div class="card cascade-card" data-cascade="{sid}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {state_class}">{state}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{str(enabled).lower()}" title="{'Отключить каскад' if enabled else 'Включить каскад'}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{cascade_check_html(item)}</div><details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="cascade-mode"><label class="choice-card"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}><span><strong>{icon("cascade")}Весь VLESS-трафик</strong><small>Все VLESS-клиенты пойдут через каскад</small></span></label><label class="choice-card"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}><span><strong>{icon("users")}Только выбранные</strong><small>Через каскад пойдут отмеченные, остальные — напрямую</small></span></label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
+    return f'''<div class="card cascade-card" data-cascade="{sid}" data-pending="{int(pending)}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {state_class}">{state}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{str(enabled).lower()}" title="{'Отключить каскад' if enabled else 'Включить каскад'}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{cascade_check_html(item)}</div>{job_line}<details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="cascade-mode"><label class="choice-card"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}><span><strong>{icon("cascade")}Весь VLESS-трафик</strong><small>Все VLESS-клиенты пойдут через каскад</small></span></label><label class="choice-card"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}><span><strong>{icon("users")}Только выбранные</strong><small>Через каскад пойдут отмеченные, остальные — напрямую</small></span></label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
 
 
 def cascade_ui(items, users, path, csrf, domain):

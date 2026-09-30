@@ -226,7 +226,10 @@ def _normalize(record):
             'mode': mode if mode in ('all', 'users') else 'all',
             'users': [uid for uid in users if isinstance(uid, str) and UID_RE.fullmatch(uid)],
             'created_at': int(record.get('created_at') or 0),
-            'last_check': check if isinstance(check, dict) else None}
+            'last_check': check if isinstance(check, dict) else None,
+            # Background operation bookkeeping: a job in flight and its error.
+            'pending': bool(record.get('pending')),
+            'op_error': str(record.get('op_error') or '')}
 
 
 def load_cascades(path):
