@@ -297,9 +297,11 @@ def build_outbound(record, tag):
                                **record.get('stream', {})}}
 
 
-def _vless_uids(users):
+def _cascadable_uids(users):
+    """Profiles whose traffic enters Xray and can be routed to a cascade:
+    VLESS and Hysteria2 share the same inbound email scheme."""
     return [user for user in (users or [])
-            if user.get('protocol') == 'vless' and user.get('enabled', True)
+            if user.get('protocol') in ('vless', 'hysteria') and user.get('enabled', True)
             and UID_RE.fullmatch(str(user.get('id', '')))]
 
 
@@ -312,7 +314,7 @@ def route_assignment(cascades, users):
     """
     enabled = [record for record in (cascades or []) if record.get('enabled')]
     tags = {record['id']: 'cascade-' + record['id'] for record in enabled}
-    eligible = {user['id'] for user in _vless_uids(users)}
+    eligible = {user['id'] for user in _cascadable_uids(users)}
     owner = {}
     carries = {record['id']: False for record in enabled}
     for record in enabled:
@@ -347,7 +349,10 @@ def xray_additions(cascades, users):
         if emails:
             rules.append({'type': 'field', 'user': emails, 'outboundTag': 'cascade-' + record['id']})
     if all_tag:
-        rules.append({'type': 'field', 'inboundTag': ['vless-xhttp'], 'outboundTag': all_tag})
+        # VLESS and Hysteria2 inbounds both cascade; UDP inside Hysteria2
+        # rides XHTTP UDP-over-TCP, which needs a modern Xray on the upstream.
+        rules.append({'type': 'field', 'inboundTag': ['vless-xhttp', 'hysteria2'],
+                      'outboundTag': all_tag})
     return outbounds, rules
 
 
