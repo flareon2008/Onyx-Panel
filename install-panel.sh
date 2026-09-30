@@ -419,9 +419,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.3.2..."
+    echo "Updating Onyx Panel 1.4.0..."
 else
-    echo "Configuring Onyx Panel 1.3.2..."
+    echo "Configuring Onyx Panel 1.4.0..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -1682,7 +1682,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 from collections import defaultdict, deque
 from onyx_subscriptions import PREFIX as SUB_PREFIX
 from onyx_panel_extras import preview_document
-from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, openflux_ui, client_records, nodes_ui, cascade_ui, updates_ui, icon
+from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, openflux_ui, client_records, nodes_ui, cascade_ui, cascade_state_view, updates_ui, icon
 import onyx_metrics as server_metrics
 import onyx_update as web_updates
 import onyx_components as components
@@ -1723,6 +1723,7 @@ API_KEY_FILE="/var/lib/onyx-panel/api.key"
 NODES_FILE="/var/lib/onyx-panel/nodes.json"
 LOCATION_FILE="/var/lib/onyx-panel/location.json"
 CASCADES_FILE="/var/lib/onyx-panel/cascades.json"
+RESTART_STATUS="/var/lib/onyx-panel/restart-status.json"
 API_KEY=node_api.ensure_api_key(API_KEY_FILE)
 SUB_FETCH_SLOTS=threading.BoundedSemaphore(4)
 SUB_RATE_LOCK=threading.Lock()
@@ -2139,6 +2140,21 @@ def cascade_ping_bg(uid):
                 cascade_touch(uid,pending=False,op_error=cascade_detail(exc))
     threading.Thread(target=worker,daemon=True).start()
 
+def write_restart_status(phase,target,message=""):
+    try:
+        temporary=RESTART_STATUS+".tmp"
+        with open(temporary,"w",encoding="utf-8") as stream:
+            json.dump({"phase":phase,"target":target,"message":message,"ts":int(time.time())},stream,ensure_ascii=True)
+        os.chmod(temporary,0o600); os.replace(temporary,RESTART_STATUS)
+    except OSError: pass
+# A panel restart kills this process mid-job: on boot, settle the stale
+# "running" marker the restart modal polls so it never hangs forever.
+try:
+    with open(RESTART_STATUS,encoding="utf-8") as _stream: _st=json.load(_stream)
+    if isinstance(_st,dict) and _st.get("phase")=="running":
+        write_restart_status("done",_st.get("target",""),"Служба перезапущена.")
+except Exception: pass
+
 def subscription_registry():
     try:
         with open(USERS,encoding="utf-8") as f:
@@ -2229,8 +2245,8 @@ def proxy_link(protocol,secret,port=443,name="Proxy",username=""):
 def qr_png_bytes(link):
     return subprocess.run([QR,"-o","-","-t","PNG","-s","6","-m","2",link],
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=10).stdout
-def layout(title,body,active=""):
-    return page_layout(title,body,PANEL_PATH,active,DOMAIN)
+def layout(title,body,active="",csrf=""):
+    return page_layout(title,body,PANEL_PATH,active,DOMAIN,csrf)
 
 class Handler(BaseHTTPRequestHandler):
     timeout=20
@@ -2307,7 +2323,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.3.2","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.4.0","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2424,7 +2440,7 @@ class Handler(BaseHTTPRequestHandler):
             if path.endswith("/dashboard-data"):
                 self.send_json({"html":body,"update":web_updates.get_status()})
             else:
-                self.send_html(layout("Дашборд",dashboard_page(body,PANEL_PATH,self.csrf()),"dashboard"))
+                self.send_html(layout("Дашборд",dashboard_page(body,PANEL_PATH,self.csrf()),"dashboard",self.csrf()))
             return
 
         if path==PANEL_PATH+'/clients-state':
@@ -2441,11 +2457,11 @@ class Handler(BaseHTTPRequestHandler):
         if path==PANEL_PATH+"/users":
             profiles=[{"id":"primary","name":"Основной WEB Proxy","secret":primary(),"protocol":"web","enabled":True,"backend_port":443}]+users()
             body=users_ui(subscription_registry(),profiles,traffic(),PANEL_PATH,DOMAIN,self.csrf(),proxy_link,openflux.profile_states(),load().get("expires",{}))
-            self.send_html(layout("Клиенты",body,"users")); return
+            self.send_html(layout("Клиенты",body,"users",self.csrf())); return
         if path==PANEL_PATH+"/nodes":
             body=nodes_ui([node_api.public_node(n) for n in node_api.load_nodes(NODES_FILE)],
                           node_api.load_location(LOCATION_FILE),node_api.make_connection_token(DOMAIN,API_KEY),PANEL_PATH,self.csrf())
-            self.send_html(layout("Ноды",body,"nodes")); return
+            self.send_html(layout("Ноды",body,"nodes",self.csrf())); return
         if path==PANEL_PATH+"/cascade":
             cascade_records=cascade_api.load_cascades(CASCADES_FILE)
             panel_users=users()
@@ -2453,17 +2469,20 @@ class Handler(BaseHTTPRequestHandler):
             items=[dict(item,transport=cascade_api.transport_label(item),
                         carries=cascade_carriers.get(item["id"],False)) for item in cascade_records]
             body=cascade_ui(items,panel_users,PANEL_PATH,self.csrf(),DOMAIN)
-            self.send_html(layout("Каскад",body,"cascade")); return
+            self.send_html(layout("Каскад",body,"cascade",self.csrf())); return
         if path==PANEL_PATH+"/cascade-state":
             cascade_records=cascade_api.load_cascades(CASCADES_FILE)
             _,_,cascade_carriers=cascade_api.route_assignment(cascade_records,users())
-            self.send_json({"ok":True,"cascades":[
-                {"id":c["id"],"enabled":c["enabled"],"mode":c["mode"],
-                 "pending":bool(c.get("pending")),"op_error":c.get("op_error") or "",
-                 "carries":cascade_carriers.get(c["id"],False),
-                 "last_check":c.get("last_check")} for c in cascade_records]}); return
+            self.send_json({"ok":True,"cascades":[cascade_state_view(c,cascade_carriers) for c in cascade_records]}); return
+        if path==PANEL_PATH+"/restart-status":
+            try:
+                with open(RESTART_STATUS,encoding="utf-8") as stream:
+                    self.send_json(json.load(stream))
+            except (OSError,ValueError):
+                self.send_json({"phase":"idle"})
+            return
         if path==PANEL_PATH+"/updates":
-            self.send_html(layout("Обновления",updates_ui(PANEL_PATH,self.csrf(),web_updates.current_version()),"updates")); return
+            self.send_html(layout("Обновления",updates_ui(PANEL_PATH,self.csrf(),web_updates.current_version()),"updates",self.csrf())); return
         if path==PANEL_PATH+"/subscriptions":
             self.redirect("/users"); return
         if path==PANEL_PATH+"/update-status":
@@ -2543,9 +2562,9 @@ class Handler(BaseHTTPRequestHandler):
     const r=await fetch(form.getAttribute("action"),{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams(new FormData(form))});
     let res;try{res=await r.json()}catch(e){throw new Error("Панель недоступна. Обновите страницу и попробуйте снова.")}
     if(!r.ok||!res.ok)throw new Error(res.message||"Операция не выполнена.");
-    status.className="panel-setting-status ok";status.textContent=res.message||"Готово.";
+    status.className="panel-setting-status ok";status.textContent=res.message||"Готово.";if(window.onyxToast)onyxToast(res.message||"Сохранено.");
     if(done)done(res);
-  }catch(err){status.className="panel-setting-status err";status.textContent=err.message}
+  }catch(err){status.className="panel-setting-status err";status.textContent=err.message;if(window.onyxToast)onyxToast(err.message,"err")}
   finally{btn.disabled=false;btn.textContent=label}
 }
 const pathForm=document.getElementById("panelPathForm");
@@ -2593,7 +2612,7 @@ try{
     setTimeout(()=>{location.href=accessForm.dataset.goto},1900);return;
   }
   status.className="panel-setting-status ok";status.textContent=res.message||"Логин изменён.";
-}catch(err){status.className="panel-setting-status err";status.textContent=err.message}
+}catch(err){status.className="panel-setting-status err";status.textContent=err.message;if(window.onyxToast)onyxToast(err.message,"err")}
 finally{btn.disabled=false;btn.textContent=label}})}
 const importForm=document.getElementById("importForm");
 if(importForm){const status=document.getElementById("importStatus"),file=document.getElementById("importFile"),data=document.getElementById("importData"),pick=document.getElementById("importPick");
@@ -2648,7 +2667,7 @@ if(compGrid){
 <form id="importForm" action="{PANEL_PATH}/import"><input type=hidden name=csrf value="{token}"><input type=hidden name="backup" id="importData"><input type="file" id="importFile" accept=".tar.gz,.tgz,application/gzip" hidden><div class="actions" style="margin:4px 0 0"><a class="btn primary" href="{PANEL_PATH}/export" download>Экспорт</a><button type="button" class="btn" id="importPick">Импорт</button><button type="submit" hidden></button></div><p class="panel-setting-status" id="importStatus" role="status"></p></form></div></div></div>
 {editor}
 {panel_js}'''
-            self.send_html(layout("Настройки",body,"settings")); return
+            self.send_html(layout("Настройки",body,"settings",self.csrf())); return
 
         self.redirect("/")
 
@@ -3057,6 +3076,35 @@ if(compGrid){
                 print("landing preset failed:",type(exc).__name__,file=sys.stderr,flush=True)
                 self.send_html("Не удалось применить пресет. Предыдущая страница сохранена; проверьте службы через SSH.",503)
             return
+
+        if path==PANEL_PATH+"/service-restart":
+            target=form.get("target","")
+            if target not in ("panel","modules"):
+                self.send_json({"ok":False,"message":"Неизвестная цель перезапуска."},400); return
+            if target=="panel":
+                # The response flushes first; the restart then kills this
+                # process on purpose. The browser probes /__health until the
+                # panel is back and reloads on its own.
+                write_restart_status("running","panel","Панель перезапускается…")
+                def panel_job():
+                    time.sleep(0.6)
+                    subprocess.Popen(["systemctl","restart","onyx-panel.service"],start_new_session=True)
+                threading.Thread(target=panel_job,daemon=True).start()
+            else:
+                write_restart_status("running","modules","Перезапуск служб…")
+                def modules_job():
+                    for unit,label in (("onyx-panel-xray.service","Xray"),("tproxy-server.service","релей"),("mtproxy.service","MTProxy")):
+                        write_restart_status("running","modules","Перезапуск: "+label+"…")
+                        try: r=subprocess.run(["systemctl","restart",unit],capture_output=True,text=True,timeout=60)
+                        except subprocess.TimeoutExpired:
+                            write_restart_status("failed","modules",label+": не ответил на перезапуск."); return
+                        if r.returncode or subprocess.run(["systemctl","is-active","--quiet",unit]).returncode:
+                            st=subprocess.run(["journalctl","-u",unit,"-n","5","--no-pager"],capture_output=True,text=True)
+                            detail=((r.stderr or "")+st.stdout).strip()[-160:]
+                            write_restart_status("failed","modules",label+": "+(detail or "служба не поднялась")); return
+                    write_restart_status("done","modules","Модули перезапущены.")
+                threading.Thread(target=modules_job,daemon=True).start()
+            self.send_json({"ok":True}); return
 
         if path in (PANEL_PATH+"/cascade-add",PANEL_PATH+"/cascade-toggle",PANEL_PATH+"/cascade-delete",PANEL_PATH+"/cascade-users",PANEL_PATH+"/cascade-ping"):
             async_action=self.headers.get("X-Onyx-Async","")=="1"
@@ -3593,7 +3641,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.3.2
+Description=Onyx Panel 1.4.0
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4149,9 +4197,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.3.2 UPDATED"
+echo "          Onyx Panel 1.4.0 UPDATED"
 else
-echo "         Onyx Panel 1.3.2 IS READY"
+echo "         Onyx Panel 1.4.0 IS READY"
 fi
 echo "============================================================"
 echo

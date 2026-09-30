@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.3.2'
+VERSION = '1.4.0'
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -33,6 +33,7 @@ def icon(name):
              'settings': '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
              'nodes': '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h6M11 17.5h6"/>',
              'cascade': '<path d="m12 2-10 5 10 5 10-5-10-5Z"/><path d="m2 12.5 10 5 10-5"/><path d="m2 17.5 10 5 10-5"/>',
+             'power': '<path d="M12 3v8"/><path d="M17.4 6.6a8 8 0 1 1-10.8 0"/>',
              'logout': '<path d="M10 4H4v16h6m4-12 4 4-4 4m-6-4h10"/>',
              'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/>',
              'refresh': '<path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6"/>',
@@ -77,7 +78,61 @@ dialog{padding:25px;width:min(570px,calc(100vw - 32px));max-height:90vh;max-heig
 
 THEME_INIT = """<script>try{const saved=localStorage.getItem('onyx-theme');document.documentElement.dataset.theme=saved==='light'?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}</script>"""
 COMMON_JS = """<script>
-document.querySelectorAll('[data-theme-toggle]').forEach(b=>{function label(){const light=document.documentElement.dataset.theme==='light';b.querySelector('span').textContent=light?'Тёмная тема':'Светлая тема';b.setAttribute('aria-label',light?'Включить тёмную тему':'Включить светлую тему')}label();b.addEventListener('click',()=>{const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;try{localStorage.setItem('onyx-theme',t)}catch(e){}document.querySelectorAll('[data-theme-toggle] span').forEach(s=>s.textContent=t==='light'?'Тёмная тема':'Светлая тема');label()})});
+document.querySelectorAll('[data-theme-toggle]').forEach(b=>{function label(){const light=document.documentElement.dataset.theme==='light';const s=b.querySelector('span');if(s)s.textContent=light?'Тёмная тема':'Светлая тема';b.setAttribute('aria-label',light?'Включить тёмную тему':'Включить светлую тему')}label();b.addEventListener('click',()=>{const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;try{localStorage.setItem('onyx-theme',t)}catch(e){}document.querySelectorAll('[data-theme-toggle]').forEach(x=>{const s=x.querySelector('span');if(s)s.textContent=t==='light'?'Тёмная тема':'Светлая тема'});label()})});
+/* Small animated toast: one shared stack at the top of the screen. */
+function onyxToast(message,type){type=type==='err'?'err':'ok';
+  let box=document.getElementById('onyxToasts');
+  if(!box){box=document.createElement('div');box.id='onyxToasts';box.className='onyx-toasts';box.setAttribute('role','status');document.body.append(box)}
+  const t=document.createElement('div');t.className='onyx-toast '+type;
+  t.innerHTML='<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(type==='ok'?'<path d="m4 12.5 5 5L20 6.5"/>':'<path d="M12 9v5"/><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 17h.01"/>')+'</svg><span></span>';
+  t.querySelector('span').textContent=String(message||'Готово');
+  box.append(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300)},4200);
+  while(box.children.length>3)box.firstElementChild.remove();
+}
+/* Animated service-restart overlay with a spinning ring. */
+function onyxOps(title,text){
+  let ov=document.getElementById('onyxOps');
+  if(!ov){ov=document.createElement('div');ov.id='onyxOps';ov.className='onyx-ops';
+    ov.innerHTML='<div class="onyx-ops-card"><svg class="onyx-ops-ring" viewBox="0 0 56 56" aria-hidden="true"><circle class="bg" cx="28" cy="28" r="24"/><circle class="fg" cx="28" cy="28" r="24"/></svg><h3></h3><p></p></div>';
+    document.body.append(ov)}
+  ov.querySelector('h3').textContent=title;ov.querySelector('p').textContent=text||'';
+  requestAnimationFrame(()=>ov.classList.add('show'));return ov}
+function onyxOpsClose(){const ov=document.getElementById('onyxOps');if(ov){ov.classList.remove('show');setTimeout(()=>ov.remove(),250)}}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-service-restart]');if(!b)return;
+  const target=b.dataset.serviceRestart;
+  const ok=await onyxConfirm(target==='panel'?'Перезапустить панель? Интерфейс будет недоступен несколько секунд, затем страница обновится сама.':'Перезапустить модули — Xray, релей и MTProxy? Клиентские подключения кратко оборвутся.',{ok:'Перезапустить'});
+  if(!ok)return;
+  const modal=onyxOps(target==='panel'?'Перезапуск панели':'Перезапуск модулей','Выполняем…');
+  const p=modal.querySelector('p');
+  try{
+    const r=await fetch(b.dataset.url,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams({csrf:b.dataset.csrf,target})});
+    let res;try{res=await r.json()}catch(e2){throw new Error('Панель вернула некорректный ответ.')}
+    if(!r.ok||!res.ok)throw new Error(res.message||'Не удалось запустить перезапуск.');
+    if(target==='panel'){
+      p.textContent='Служба перезапускается — ждём возврата…';
+      const t0=Date.now();
+      while(Date.now()-t0<90000){
+        await new Promise(s=>setTimeout(s,1200));
+        try{const h=await fetch(b.dataset.url.replace(/service-restart$/,'__health'),{cache:'no-store'});
+          if(h.ok&&!h.redirected)break}catch(e3){}}
+      onyxOpsClose();onyxToast('Панель перезапущена.');setTimeout(()=>location.reload(),500);
+    }else{
+      p.textContent='Перезапускаем службы…';
+      const st=b.dataset.url.replace(/service-restart$/,'restart-status');
+      const t0=Date.now();let finished=false;
+      while(Date.now()-t0<120000){
+        await new Promise(s=>setTimeout(s,1500));
+        try{const s2=await fetch(st,{cache:'no-store'});if(!s2.ok||s2.redirected)continue;
+          const d=await s2.json();
+          if(d.message)p.textContent=d.message;
+          if(d.phase==='done'){onyxOpsClose();onyxToast(d.message||'Модули перезапущены.');finished=true;setTimeout(()=>location.reload(),500);break}
+          if(d.phase==='failed'){onyxOpsClose();onyxToast(d.message||'Ошибка перезапуска.','err');finished=true;break}}catch(e3){}}
+      if(!finished){onyxOpsClose();onyxToast('Перезапуск не подтвердился. Проверьте службы.','err')}
+    }
+  }catch(e){onyxOpsClose();onyxToast(e.message,'err')}
+});
 async function onyxCopy(text,container=document.body){try{await navigator.clipboard.writeText(text);return}catch(e){}const prior=document.activeElement,x=document.createElement('textarea');x.value=text;x.setAttribute('aria-label','Копирование ссылки');x.style.position='fixed';x.style.opacity='0';container.appendChild(x);try{x.focus();x.select();if(!document.execCommand('copy'))throw new Error('Clipboard unavailable')}finally{x.remove();if(prior?.isConnected)prior.focus()}}
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-copy]');if(b&&!b.disabled){const old=b.innerHTML;b.disabled=true;try{await onyxCopy(b.dataset.copy,b.closest('dialog')||document.body);b.textContent=b.classList.contains('icon-btn')?'✓':'✓ Скопировано'}catch(err){b.textContent=b.classList.contains('icon-btn')?'!':'Не удалось скопировать'}finally{setTimeout(()=>{b.innerHTML=old;b.disabled=false},1600)}}const close=e.target.closest('[data-close-dialog]');if(close){const d=close.closest('dialog');d.close();const frame=d.querySelector('iframe');if(frame){frame.removeAttribute('srcdoc')}}});
 /* Themed confirm dialog replacing window.confirm across the panel */
@@ -263,15 +318,21 @@ CSS += '''
 '''
 
 
-def theme_button(): return '<button type="button" class="quiet" data-theme-toggle>'+icon('sun')+'<span class="theme-label">Тёмная тема</span><i class="theme-track" aria-hidden="true"></i></button>'
+def theme_button(): return '<button type="button" class="quiet" data-theme-toggle aria-label="Переключить тему">'+icon('sun')+'</button>'
 
 
-def page_layout(title, body, path, active, domain):
+def restart_buttons(path, csrf):
+    if not csrf: return ''
+    return (f'<button type="button" class="quiet" data-service-restart="panel" data-url="{esc(path)}/service-restart" data-csrf="{esc(csrf)}" aria-label="Перезапустить панель" title="Перезапустить панель">{icon("power")}</button>'
+            f'<button type="button" class="quiet" data-service-restart="modules" data-url="{esc(path)}/service-restart" data-csrf="{esc(csrf)}" aria-label="Перезапустить модули" title="Перезапустить модули — Xray, релей, MTProxy">{icon("refresh")}</button>')
+
+
+def page_layout(title, body, path, active, domain, csrf=''):
     links = ''.join(f'<a class="{"active" if key==active else ""}" href="{esc(path)}/{key}">{icon(glyph)}{label}</a>' for key, label, glyph in [('dashboard','Дашборд','grid'),('users','Пользователи','users'),('nodes','Ноды','nodes'),('cascade','Каскад','cascade'),('updates','Обновления','refresh'),('settings','Настройки','settings')])
     social = ''
     banner = f'''<aside id="releaseBanner" class="release-banner" role="status" hidden><span class="release-banner-mark">{icon('refresh')}</span><div class="release-banner-copy"><b>Доступна новая версия Onyx Panel</b><small>Обновление можно установить с автоматической резервной копией</small></div><span id="releaseBannerVersion" class="release-banner-version"></span><div class="release-banner-actions"><a class="btn primary" href="{esc(path)}/updates">Посмотреть</a><button type="button" id="releaseBannerClose" class="release-banner-close" aria-label="Скрыть уведомление">×</button></div></aside>'''
     banner_script = f'''<script>(()=>{{const banner=document.getElementById('releaseBanner'),version=document.getElementById('releaseBannerVersion'),close=document.getElementById('releaseBannerClose');if(!banner)return;function dismissed(v){{try{{return localStorage.getItem('onyx-release-banner:'+v)==='1'}}catch(e){{return false}}}}function show(d){{if(!d||!d.available||!d.latest||dismissed(d.latest)){{banner.hidden=true;return}}banner.dataset.version=d.latest;version.textContent=(d.current||'—')+' → '+d.latest;banner.hidden=false}}async function check(){{try{{const r=await fetch('{esc(path)}/update-status',{{cache:'no-store'}});if(r.ok&&!r.redirected)show(await r.json())}}catch(e){{}}}}close.addEventListener('click',()=>{{const v=banner.dataset.version;if(v)try{{localStorage.setItem('onyx-release-banner:'+v,'1')}}catch(e){{}}banner.hidden=true}});window.addEventListener('onyx-update-status',e=>show(e.detail));check();setInterval(check,30000)}})();</script>'''
-    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body><div class="app"><div class="workspace"><header class="appbar"><div class="appbar-left"><a class="mini-brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel"><img src="{esc(path)}/__logo" alt="" width="38" height="38"></a><div class="host"><i></i>{esc(domain)}</div></div><nav class="topnav" id="topnav" aria-label="Разделы панели">{links}</nav><div class="appbar-tools">{theme_button()}{social}<a class="logout" href="{esc(path)}/logout" aria-label="Выйти">{icon('logout')}<span>Выйти</span></a><button type="button" class="burger" id="navBurger" aria-expanded="false" aria-controls="topnav" aria-label="Открыть меню">{icon('menu')}</button></div></header>{banner}<main>{body}</main></div></div>{COMMON_JS}{banner_script}</body></html>'''
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body><div class="app"><div class="workspace"><header class="appbar"><div class="appbar-left"><a class="mini-brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel"><img src="{esc(path)}/__logo" alt="" width="38" height="38"></a><div class="host"><i></i>{esc(domain)}</div></div><nav class="topnav" id="topnav" aria-label="Разделы панели">{links}</nav><div class="appbar-tools">{theme_button()}{restart_buttons(path, csrf)}{social}<a class="logout" href="{esc(path)}/logout" aria-label="Выйти">{icon('logout')}<span>Выйти</span></a><button type="button" class="burger" id="navBurger" aria-expanded="false" aria-controls="topnav" aria-label="Открыть меню">{icon('menu')}</button></div></header>{banner}<main>{body}</main></div></div>{COMMON_JS}{banner_script}</body></html>'''
 
 
 def login_ui(path):
@@ -888,11 +949,11 @@ mtprotoPort.addEventListener('input',updateCreate);mtprotoDevices.addEventListen
 function showCreateError(message){createError.textContent=message||'Не удалось создать подключение.';createError.hidden=false;createError.scrollIntoView({block:'nearest',behavior:'smooth'})}
 createForm.addEventListener('input',()=>{createError.hidden=true});document.getElementById('newAccount').addEventListener('click',()=>{createError.hidden=true},{capture:true});
 createForm.addEventListener('submit',async e=>{e.preventDefault();e.stopImmediatePropagation();if(kindField.value==='subscription'&&!subFields.querySelector('input[type=checkbox]:checked')){showCreateError('Выберите хотя бы один протокол.');return}createError.hidden=true;createDialog.classList.add('is-submitting');createSubmit.disabled=true;createSubmit.textContent='Создаём…';try{const response=await fetch(createForm.action,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams(new FormData(createForm))});if(response.redirected)throw new Error('Сессия завершена. Войдите заново.');let result;try{result=await response.json()}catch(error){throw new Error('Панель вернула некорректный ответ. Повторите попытку.')}if(!response.ok||!result.ok)throw new Error(result.message||'Не удалось создать подключение.');location.href=clientPath+'/users'}catch(error){showCreateError(error.message)}finally{createDialog.classList.remove('is-submitting');createSubmit.disabled=false;createSubmit.textContent='Создать доступ'}},true);
-async function requestClient(fields){const r=await fetch(clientPath+'/client-action',{method:'POST',body:new URLSearchParams({csrf:clientCsrf,...fields})});if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');let d;try{d=await r.json()}catch(e){throw new Error('Нет корректного ответа. Обновите список перед повторной попыткой.')}if(!r.ok||!d.ok)throw new Error(d.message||'Изменение не применено')}
+async function requestClient(fields){const r=await fetch(clientPath+'/client-action',{method:'POST',body:new URLSearchParams({csrf:clientCsrf,...fields})});if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');let d;try{d=await r.json()}catch(e){throw new Error('Нет корректного ответа. Обновите список перед повторной попыткой.')}if(!r.ok||!d.ok)throw new Error(d.message||'Изменение не применено');if(window.onyxToast)onyxToast(d.message||'Сохранено');return d}
 function updateClientStats(){const values=[allRows.length,allRows.filter(r=>r.dataset.active==='1').length,allRows.filter(r=>r.dataset.kind==='subscription').length,bytes(allRows.reduce((sum,r)=>sum+Number(r.dataset.traffic||0),0))];document.querySelectorAll('.client-stat b').forEach((b,i)=>b.textContent=values[i])}
 function paintAccess(row,enabled,active=false){row.dataset.enabled=enabled?'1':'0';row.dataset.active=active?'1':'0';const toggle=row.querySelector('[role=switch]');if(toggle)toggle.setAttribute('aria-checked',enabled?'true':'false');row.querySelectorAll('.badge').forEach(badge=>{badge.classList.toggle('on',enabled&&active);badge.textContent=!enabled?'Отключена':row.dataset.kind==='openflux'?(active?'Работает':'Остановлен'):(active?'Передаёт трафик':'Нет трафика')});updateClientStats();list()}
 function removeClientRow(row){const index=allRows.indexOf(row);if(index>=0)allRows.splice(index,1);const detail=document.getElementById('client-'+row.dataset.id);if(detail?.open)detail.close();detail?.remove();row.remove();updateClientStats();list()}
-async function requestForm(form){const response=await fetch(form.action,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams(new FormData(form))});if(response.redirected)throw new Error('Сессия завершена. Войдите заново.');let result;try{result=await response.json()}catch(error){throw new Error('Панель вернула некорректный ответ.')}if(!response.ok||!result.ok)throw new Error(result.message||'Операция не выполнена.');return result}
+async function requestForm(form){const response=await fetch(form.action,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams(new FormData(form))});if(response.redirected)throw new Error('Сессия завершена. Войдите заново.');let result;try{result=await response.json()}catch(error){throw new Error('Панель вернула некорректный ответ.')}if(!response.ok||!result.ok)throw new Error(result.message||'Операция не выполнена.');if(window.onyxToast)onyxToast(result.message||'Готово');return result}
 function lockClients(value){changing=value}
 function confirmClientAccess(message){const d=document.getElementById('accessConfirm');if(d.open)return Promise.resolve(false);d.querySelector('[data-access-message]').textContent=message;d.returnValue='';return new Promise(resolve=>{d.addEventListener('close',()=>resolve(d.returnValue==='apply'),{once:true});d.showModal()})}
 async function setAccess(rows,value,ask=false){if(changing||!rows.length)return;if(ask&&!await confirmClientAccess((value?'Включить':'Отключить')+' доступ для '+rows.length+' клиент(а/ов)? Соединения могут кратковременно прерваться.'))return;const previous=rows.map(r=>({enabled:r.dataset.enabled,active:r.dataset.active}));rows.forEach(r=>{paintAccess(r,Boolean(value),false);r.classList.add('client-pending')});lockClients(true);notice.hidden=false;let done=0;try{for(const r of rows){notice.textContent='Применение: '+(done+1)+' / '+rows.length;await requestClient({id:r.dataset.id,kind:r.dataset.kind,operation:'state',enabled:String(value)});done++}notice.textContent='Готово. Доступ изменён без перезагрузки страницы.';allRows.forEach(r=>{const c=r.querySelector('[data-select-client]');if(c)c.checked=false});selection()}catch(e){for(let i=done;i<rows.length;i++)paintAccess(rows[i],previous[i].enabled==='1',previous[i].active==='1');notice.textContent='Применено '+done+' из '+rows.length+'. '+e.message}finally{rows.forEach(r=>r.classList.remove('client-pending'));lockClients(false)}}
@@ -1098,6 +1159,23 @@ CSS += '''
 .cascade-clients{margin-top:13px}.cascade-clients-head{display:flex;align-items:center;gap:9px;margin-bottom:9px;font-size:11px}.cascade-clients-head b{margin-right:auto;font-size:11px;font-weight:550;color:var(--muted)}.cascade-count{font:550 11px ui-monospace,monospace;color:var(--accent);white-space:nowrap}.cascade-clients-tools{display:flex;gap:4px}.cascade-clients-tools button{padding:3px 10px;font-size:10px}
 .cascade-clients-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:7px}.cascade-client{position:relative;display:flex;align-items:center;gap:9px;margin:0;padding:8px 11px;border:1px solid var(--line);border-radius:11px;background:var(--input);color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}.cascade-client:hover{border-color:var(--accent)}.cascade-client input{position:absolute;opacity:0;width:1px;height:1px}.cascade-client:has(input:checked){border-color:var(--accent);background:var(--tint);box-shadow:inset 0 0 0 1px var(--accent)}.cascade-client:after{content:"";flex:0 0 auto;width:17px;height:17px;margin-left:auto;border:1.5px solid var(--line);border-radius:50%;transition:border .15s}.cascade-client:has(input:checked):after{border:5.5px solid var(--accent)}.cascade-client .client-initial{width:26px;height:26px;border-radius:8px;font-size:12px}.cascade-client-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500}
 @media(max-width:560px){.cascade-mode{grid-template-columns:1fr}.cascade-clients-grid{grid-template-columns:1fr 1fr}}
+.cascade-section form>button.primary{margin-top:14px}
+.onyx-toasts{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:140;display:grid;gap:8px;justify-items:center;pointer-events:none;width:min(480px,calc(100vw - 24px))}
+.onyx-toast{display:flex;align-items:center;gap:9px;max-width:100%;padding:11px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow);font-size:12px;font-weight:550;opacity:0;transform:translateY(-14px) scale(.97);transition:opacity .25s,transform .25s}
+.onyx-toast.show{opacity:1;transform:translateY(0) scale(1)}
+.onyx-toast .ico{width:16px;height:16px;flex:0 0 auto;color:var(--green)}
+.onyx-toast.err{border-color:var(--red)}.onyx-toast.err .ico{color:var(--red)}
+.onyx-ops{position:fixed;inset:0;z-index:150;display:grid;place-items:center;background:#020d14aa;backdrop-filter:blur(7px);opacity:0;transition:opacity .2s}
+.onyx-ops.show{opacity:1}
+.onyx-ops-card{width:min(380px,calc(100vw - 32px));padding:28px 26px;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
+.onyx-ops-card h3{font-size:16px;margin:0 0 6px}
+.onyx-ops-card p{font-size:12px;color:var(--muted);margin:0;min-height:18px}
+.onyx-ops-ring{width:60px;height:60px;margin:0 auto 16px;display:block}
+.onyx-ops-ring circle{fill:none;stroke-width:5;stroke-linecap:round;transform-origin:center}
+.onyx-ops-ring .bg{stroke:var(--line)}
+.onyx-ops-ring .fg{stroke:var(--accent);stroke-dasharray:113;stroke-dashoffset:70;animation:onyx-spin 1s linear infinite}
+@keyframes onyx-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.onyx-ops-ring .fg{animation:none}}
 '''
 
 CASCADE_JS='''<script>
@@ -1110,30 +1188,49 @@ async function post(action,data){
   if(!r.ok||!res.ok)throw new Error(res.message||'Операция не выполнена.');
   return res;}
 /* Long work (probe + Xray restart) runs in the background on the server.
-   While any card is pending, poll the state and reload once it settles. */
-let polling=false;
-function ensurePoll(){
-  if(polling)return;polling=true;
-  let tries=0;
-  const timer=setInterval(async()=>{
-    tries++;
-    if(tries>60){clearInterval(timer);polling=false;return}
+   The live poller fetches /cascade-state every few seconds and patches each
+   card in place: badge, switch, check result and the job status line. */
+function statePatch(d){
+  const card=document.querySelector('[data-cascade="'+window.CSS.escape(d.id)+'"]');
+  if(!card)return false;
+  const badge=card.querySelector('.cascade-meta .badge');
+  if(badge){badge.textContent=d.state_text;badge.className='badge '+(d.state_class||'')}
+  const sw=card.querySelector('.access-switch');
+  if(sw){sw.setAttribute('aria-checked',d.switch_checked);sw.setAttribute('title',d.switch_title);
+    const form=sw.closest('form'),op=form&&form.querySelector('[name=operation]');
+    if(op)op.value=d.switch_checked==='true'?'disable':'enable'}
+  const check=card.querySelector('[data-check]');
+  if(check){const tpl=document.createElement('template');tpl.innerHTML=d.check_html;
+    if(tpl.content.firstElementChild)check.replaceWith(tpl.content.firstElementChild)}
+  const job=card.querySelector('[data-job]');
+  if(job)job.innerHTML=d.job_html||'';
+  return true}
+let liveTimer=null;
+function startLive(){
+  if(liveTimer)return;
+  liveTimer=setInterval(async()=>{
+    if(document.hidden)return;
     try{const r=await fetch(PATH+'/cascade-state',{cache:'no-store'});
       if(!r.ok||r.redirected)return;
-      const d=await r.json();
-      if(!(d.cascades||[]).some(c=>c.pending)){clearInterval(timer);polling=false;location.reload()}}
-    catch(e){}});
-}
-if(document.querySelector('[data-pending="1"]'))ensurePoll();
+      const d=await r.json(),list=d.cascades||[];
+      let unknown=false;
+      list.forEach(c=>{if(!statePatch(c))unknown=true});
+      document.querySelectorAll('[data-cascade]').forEach(el=>{
+        if(!list.some(c=>c.id===el.dataset.cascade))el.remove()});
+      if(unknown)location.reload();
+    }catch(e){}},3000);}
+startLive();
 document.querySelectorAll('[data-cascade-ping]').forEach(button=>{
   button.addEventListener('click',async()=>{
     if(button.disabled)return;
     const card=button.closest('[data-cascade]'),out=card.querySelector('[data-check]');
     const old=button.innerHTML;button.disabled=true;button.textContent='Проверяю…';
-    if(out){out.textContent='Проверка выполняется — страница обновится с результатом…';out.classList.remove('ok','err')}
-    try{await post('cascade-ping',{id:card.dataset.cascade});ensurePoll()}
-    catch(e){if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok');button.disabled=false;button.innerHTML=old}}
-    if(!out||!out.classList.contains('err')){button.disabled=false;button.innerHTML=old}});
+    if(out)out.textContent='Проверка выполняется…';
+    try{const res=await post('cascade-ping',{id:card.dataset.cascade});
+      if(window.onyxToast)onyxToast(res.message||'Проверка запущена.');}
+    catch(e){if(window.onyxToast)onyxToast(e.message,'err');
+      if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok')}}
+    finally{button.disabled=false;button.innerHTML=old}});
 });
 document.querySelectorAll('form[data-cascade-toggle]').forEach(form=>{
   const button=form.querySelector('button');
@@ -1141,10 +1238,11 @@ document.querySelectorAll('form[data-cascade-toggle]').forEach(form=>{
     if(button.disabled)return;
     const previous=button.getAttribute('aria-checked');
     button.disabled=true;button.setAttribute('aria-checked',previous==='true'?'false':'true');
-    try{await post('cascade-toggle',new URLSearchParams(new FormData(form)));ensurePoll()}
-    catch(e){button.setAttribute('aria-checked',previous);button.disabled=false;
-      const out=form.closest('[data-cascade]').querySelector('[data-check]');
-      if(out){out.textContent=e.message;out.classList.add('err');out.classList.remove('ok')}}});
+    try{const res=await post('cascade-toggle',new URLSearchParams(new FormData(form)));
+      if(window.onyxToast)onyxToast(res.message||'Сохранено — применяется в фоне…')}
+    catch(e){button.setAttribute('aria-checked',previous);
+      if(window.onyxToast)onyxToast(e.message,'err')}
+    finally{button.disabled=false}});
 });
 document.querySelectorAll('form[data-cascade-users]').forEach(form=>{
   const block=form.querySelector('[data-users-block]'),boxes=[...form.querySelectorAll('input[name=users]')],
@@ -1159,14 +1257,17 @@ document.querySelectorAll('form[data-cascade-users]').forEach(form=>{
   form.addEventListener('submit',async e=>{
     e.preventDefault();
     const status=form.querySelector('[data-form-status]'),button=form.querySelector('button.primary');
-    button.disabled=true;status.textContent='Сохраняю — применение в фоне, страница обновится…';status.classList.remove('err');
+    button.disabled=true;status.textContent='Сохраняю…';status.classList.remove('err');
     /* The backend flattens repeated fields, so selected clients travel as one
        comma-joined value instead of several "users" checkboxes. */
     const payload={id:form.querySelector('[name=id]').value,
       mode:form.querySelector('input[name=mode]:checked').value,
       users:boxes.filter(b=>b.checked).map(b=>b.value).join(',')};
-    try{await post('cascade-users',payload);ensurePoll()}
-    catch(err){status.textContent=err.message;status.classList.add('err');button.disabled=false}});
+    try{const res=await post('cascade-users',payload);
+      status.textContent='';if(window.onyxToast)onyxToast(res.message||'Сохранено — применяется в фоне…')}
+    catch(err){status.textContent=err.message;status.classList.add('err');
+      if(window.onyxToast)onyxToast(err.message,'err')}
+    finally{button.disabled=false}});
 });
 const dialog=document.getElementById('cascadeAdd');
 if(dialog){
@@ -1175,9 +1276,11 @@ if(dialog){
   form.addEventListener('submit',async e=>{
     e.preventDefault();
     const status=form.querySelector('[data-form-status]'),button=form.querySelector('button.primary');
-    button.disabled=true;status.textContent='Проверяю ключ и применяю каскад…';status.classList.remove('err');
-    try{await post('cascade-add',new URLSearchParams(new FormData(form)));location.reload()}
-    catch(err){status.textContent=err.message;status.classList.add('err');button.disabled=false}});
+    button.disabled=true;status.textContent='Добавляю каскад…';status.classList.remove('err');
+    try{const res=await post('cascade-add',new URLSearchParams(new FormData(form)));
+      if(window.onyxToast)onyxToast(res.message||'Каскад добавлен.');location.reload()}
+    catch(err){status.textContent=err.message;status.classList.add('err');
+      if(window.onyxToast)onyxToast(err.message,'err');button.disabled=false}});
 }})();
 </script>'''
 
@@ -1192,21 +1295,33 @@ def cascade_check_html(item):
     return '<span class="cascade-latency" data-check>Ещё не проверялся</span>'
 
 
-def cascade_card(item, vless_users, path, csrf):
-    sid=esc(item['id'])
+def cascade_state_view(item, carriers=None):
+    """Display state of one cascade card, shared by the page render and the
+    /cascade-state JSON the live poller patches the DOM with."""
+    carriers = carriers or {}
     enabled=bool(item.get('enabled'))
     pending=bool(item.get('pending'))
     op_error=str(item.get('op_error') or '')
+    carries=carriers.get(item.get('id'), item.get('carries', False))
     if not enabled: state,state_class='Выключен',''
-    elif item.get('carries'): state,state_class='Передаёт трафик','on'
+    elif carries: state,state_class='Передаёт трафик','on'
     elif item.get('mode')=='all': state,state_class='В резерве','warn'
     elif not item.get('users'): state,state_class='Клиенты не выбраны',''
     else: state,state_class='Перекрыт другим каскадом','warn'
-    job_line=''
-    if pending:
-        job_line='<div class="cascade-check"><span class="cascade-latency" data-job>Выполняется: проверка и применение конфигурации — страница обновится сама…</span></div>'
-    elif op_error:
-        job_line=f'<div class="cascade-check"><span class="cascade-latency err" data-job>Не удалось применить: {esc(op_error)}</span></div>'
+    if pending: job='<span class="cascade-latency">Выполняется: проверка и применение конфигурации…</span>'
+    elif op_error: job=f'<span class="cascade-latency err">Не удалось применить: {esc(op_error)}</span>'
+    else: job=''
+    return {'id':item.get('id'),'state_text':state,'state_class':state_class,
+            'switch_checked':str(enabled).lower(),
+            'switch_title':'Отключить каскад' if enabled else 'Включить каскад',
+            'check_html':cascade_check_html(item),'job_html':job,'pending':pending}
+
+
+def cascade_card(item, vless_users, path, csrf):
+    sid=esc(item['id'])
+    view=cascade_state_view(item,{item.get('id'):bool(item.get('carries'))})
+    pending=bool(item.get('pending'))
+    enabled_bool=view['switch_checked']=='true'
     mode=item.get('mode','all')
     rows=[]
     for user in vless_users:
@@ -1222,7 +1337,7 @@ def cascade_card(item, vless_users, path, csrf):
                      '<div class="cascade-clients-grid">'+''.join(rows)+'</div></div>')
     else:
         users_block='<div class="cascade-clients" data-users-block><p class="sub">VLESS-клиентов нет. Создайте их в разделе «Пользователи».</p></div>'
-    return f'''<div class="card cascade-card" data-cascade="{sid}" data-pending="{int(pending)}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {state_class}">{state}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{str(enabled).lower()}" title="{'Отключить каскад' if enabled else 'Включить каскад'}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{cascade_check_html(item)}</div>{job_line}<details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="cascade-mode"><label class="choice-card"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}><span><strong>{icon("cascade")}Весь VLESS-трафик</strong><small>Все VLESS-клиенты пойдут через каскад</small></span></label><label class="choice-card"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}><span><strong>{icon("users")}Только выбранные</strong><small>Через каскад пойдут отмеченные, остальные — напрямую</small></span></label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
+    return f'''<div class="card cascade-card" data-cascade="{sid}" data-pending="{int(pending)}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {view["state_class"]}">{view["state_text"]}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled_bool else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{view["switch_checked"]}" title="{view["switch_title"]}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{view["check_html"]}</div><div class="cascade-check cascade-job" data-job>{view["job_html"]}</div><details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="cascade-mode"><label class="choice-card"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}><span><strong>{icon("cascade")}Весь VLESS-трафик</strong><small>Все VLESS-клиенты пойдут через каскад</small></span></label><label class="choice-card"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}><span><strong>{icon("users")}Только выбранные</strong><small>Через каскад пойдут отмеченные, остальные — напрямую</small></span></label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
 
 
 def cascade_ui(items, users, path, csrf, domain):
