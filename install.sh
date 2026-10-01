@@ -6,7 +6,7 @@
 #          cd onyx-panel && ./install.sh
 #   2. One-command remote install — downloads the latest stable release
 #      straight from this repository and installs everything from it:
-#          bash <(curl -fsSL https://raw.githubusercontent.com/flareon2008/Onyx-Panel/main/install.sh)
+#          bash <(curl -fsSL https://raw.githubusercontent.com/xCodeOn/Onyx-Panel/main/install.sh)
 #
 # The panel modules (AmneziaWG binaries, OpenFlux) ship with the release;
 # Xray, Caddy, Go, AmneziaWG tools and the relay source are downloaded from
@@ -17,7 +17,7 @@ umask 077
 die() { echo "ERROR: $*" >&2; exit 1; }
 [[ ${EUID:-1} -eq 0 ]] || die "Run this command with sudo or as root."
 
-REPO_OWNER="flareon2008"
+REPO_OWNER="xCodeOn"
 REPO_NAME="Onyx-Panel"
 REPO_SLUG="${REPO_OWNER}/${REPO_NAME}"
 

@@ -15,7 +15,7 @@ UNIT = 'onyx-panel-web-update.service'
 # Onyx Panel ships self-contained: the updater normally reinstalls from the
 # package already unpacked on this server. Set ONYX_UPDATE_REPOSITORY to check
 # and pull releases from your own Git repository instead.
-REPO = os.environ.get('ONYX_UPDATE_REPOSITORY', 'https://github.com/flareon2008/Onyx-Panel.git')
+REPO = os.environ.get('ONYX_UPDATE_REPOSITORY', 'https://github.com/xCodeOn/Onyx-Panel.git')
 PACKAGE_DIR = Path('/opt/onyx-panel-package')
 UPDATER = '/usr/local/sbin/onyx-panel-update'
 
