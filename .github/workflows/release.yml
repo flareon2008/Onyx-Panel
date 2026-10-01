@@ -1,0 +1,84 @@
+# Auto-release: on every push to main the workflow reads the panel version
+# from install-core.sh and, when a v<version> tag does not exist yet, creates
+# the tag and a GitHub Release with commit-list notes (same style as
+# release.sh). Bump the version -> push -> the release appears by itself.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect version
+        id: version
+        run: |
+          VERSION="$(sed -n 's/^VERSION="\([^"]*\)"/\1/p' install-core.sh | head -n1)"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Cannot parse VERSION from install-core.sh, got: '$VERSION'"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check version consistency
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          for f in install-final.sh install-panel.sh README.md; do
+            if ! grep -qF "$VERSION" "$f"; then
+              echo "::error::Version mismatch: $f does not mention $VERSION — bump the version there too."
+              exit 1
+            fi
+          done
+
+      - name: Skip if tag already exists
+        id: check
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG already exists — nothing to release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release notes
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          PREV="$(git tag -l 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$' | sort -V | tail -n1)"
+          if [[ -n "$PREV" && "$PREV" != "$TAG" ]]; then RANGE="$PREV..HEAD"; else RANGE="HEAD"; fi
+          {
+            echo "## Изменения"
+            echo
+            git log --no-decorate --format='- %s (%h)' $RANGE
+          } > NOTES.md
+          echo "----- release notes -----"
+          cat NOTES.md
+          echo "-------------------------"
+
+      - name: Create tag and release
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Release Onyx Panel $VERSION"
+          git push origin "refs/tags/v$VERSION"
+          gh release create "v$VERSION" --title "Onyx Panel $VERSION" --notes-file NOTES.md
+          echo "Release published: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v$VERSION"
