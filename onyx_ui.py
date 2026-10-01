@@ -260,6 +260,34 @@ CSS += '''.preset[data-preset-card]{display:block;padding:0;aspect-ratio:16/10;o
 .preset[data-preset-card]:hover .preset-veil,.preset[data-preset-card]:focus-within .preset-veil,.preset[data-preset-card].revealed .preset-veil{opacity:1;pointer-events:auto}
 .preset[data-preset-card].has-frame .preset-art{display:none}
 @media(max-width:700px){.preset-grid{grid-template-columns:1fr}}'''
+CSS += '''.palette-dialog{width:min(560px,calc(100vw - 28px));padding:0;border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}
+.palette-dialog::backdrop{background:#0009;backdrop-filter:blur(2px)}
+.palette-dialog input{border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--raised);padding:15px 17px;font-size:13px}
+.palette-results{max-height:46dvh;overflow:auto;padding:6px}
+.palette-results button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:0;background:transparent;border-radius:9px;padding:10px 11px;font-size:12px;text-align:left}
+.palette-results button small{color:var(--muted);font-size:10px}
+.palette-results button.selected,.palette-results button:hover{background:var(--tint)}
+.palette-empty{padding:16px;color:var(--muted);font-size:12px;text-align:center}
+.palette-hint{padding:8px 14px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
+.failover-toggle{display:inline-flex;align-items:center;gap:9px;font-size:11px;color:var(--muted);cursor:pointer}
+.failover-note{display:block;font-size:11px;color:var(--muted);margin:-6px 0 14px}
+.top-list{display:grid;gap:4px}
+.top-row{display:flex;align-items:center;gap:11px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--text);font-size:12px}
+.top-row:hover{border-color:var(--accent)}
+.top-row .top-name{display:flex;flex-direction:column;min-width:0;flex:1;overflow-wrap:anywhere}
+.top-row .top-name small{color:var(--muted);font-size:10px}
+.top-row>b{font:550 12px ui-monospace,monospace;white-space:nowrap}
+.login-log{width:100%;border-collapse:collapse;font-size:11px}
+.login-log th{text-align:left;color:var(--muted);font-weight:550;padding:7px 6px;border-bottom:1px solid var(--line)}
+.login-log td{padding:8px 6px;border-bottom:1px solid var(--line)}
+.login-log td.muted{color:var(--muted)}
+.api-key-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12px}
+.api-key-row b{min-width:0;flex:1;overflow-wrap:anywhere}
+.preset-live-bar{display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border:1px solid var(--line);border-radius:10px;background:var(--raised);font:11px ui-monospace,monospace;color:var(--muted)}
+.preset-live-frame{display:block;width:100%;height:min(52dvh,520px);margin-top:8px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.editor-columns{display:grid;grid-template-columns:1fr}
+@media(min-width:1100px){.preset-create-dialog{width:min(1240px,calc(100vw - 28px))}.preset-create-dialog .editor-columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}.preset-live-frame{height:min(56dvh,560px)}}
+body[data-role=observer] .row-actions,body[data-role=observer] .bulk-bar,body[data-role=observer] .page-head .actions,body[data-role=observer] .cascade-head .actions,body[data-role=observer] .preset-veil .actions,body[data-role=observer] .access-switch,body[data-role=observer] .clients-table .select-col{display:none!important}'''
 CSS += '''
 .openflux-card{overflow:hidden;background:radial-gradient(circle at 100% 0,var(--tint),transparent 38%),var(--surface)}.openflux-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.openflux-title{display:flex;align-items:center;gap:13px}.openflux-mark{display:grid;place-items:center;width:43px;height:43px;flex:0 0 auto;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-radius:12px;background:var(--tint);color:var(--accent);font-weight:750}.openflux-title h2{margin:0}.openflux-title p{margin:4px 0 0;color:var(--muted);font-size:11px}.openflux-status{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--line);border-radius:99px;color:var(--muted);font-size:10px;white-space:nowrap}.openflux-status i{width:7px;height:7px;border-radius:50%;background:var(--muted)}.openflux-status.on{color:var(--green)}.openflux-status.on i{background:var(--green);box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 14%,transparent)}.openflux-form{margin-top:22px}.openflux-input{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}.openflux-input input{font:11px ui-monospace,monospace}.openflux-input button{min-width:155px}.openflux-hint{display:block;margin-top:9px;font-size:10px}.openflux-client{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}.openflux-field{min-width:0;padding:13px;border:1px solid var(--line);border-radius:10px;background:var(--input)}.openflux-field.wide{grid-column:1/-1}.openflux-field span{display:block;margin-bottom:7px;color:var(--muted);font-size:9px;letter-spacing:.06em;text-transform:uppercase}.openflux-value{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px}.openflux-value input{min-width:0;padding:9px;font:10px ui-monospace,monospace}.openflux-value button{padding:8px 10px}.openflux-field b{font:500 12px ui-monospace,monospace}.openflux-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:15px}.openflux-controls>small{max-width:600px;font-size:10px}.openflux-controls .actions{margin-left:auto}.openflux-copy-status{min-height:16px;margin:9px 0 0;color:var(--accent);font-size:10px}@media(max-width:700px){.openflux-head{align-items:stretch;flex-direction:column}.openflux-status{width:max-content}.openflux-input{grid-template-columns:1fr}.openflux-input button{width:100%}.openflux-client{grid-template-columns:1fr}.openflux-field.wide{grid-column:auto}.openflux-controls{align-items:stretch;flex-direction:column}.openflux-controls .actions{display:grid;width:100%;margin:0}.openflux-controls .actions form,.openflux-controls .actions button{width:100%}}
 '''
@@ -343,16 +371,54 @@ def restart_buttons(path, csrf):
             f'<button type="button" class="quiet" data-service-restart="modules" data-url="{esc(path)}/service-restart" data-csrf="{esc(csrf)}" aria-label="Перезапустить модули" title="Перезапустить модули — Xray, релей, MTProxy">{icon("refresh")}</button>')
 
 
-def page_layout(title, body, path, active, domain, csrf=''):
+# Command palette: one overlay for pages, quick actions and client search.
+# Pure frontend — client names arrive from /clients-state on first open.
+PALETTE_JS='''<script>
+(()=>{const PATH=@@PATH@@,dialog=document.getElementById('paletteDialog');
+if(!dialog)return;
+const input=document.getElementById('paletteInput'),box=document.getElementById('paletteResults');
+let clients=null,cursor=0,items=[];
+const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sections=[['Дашборд','/dashboard','Раздел'],['Клиенты','/users','Раздел'],['Ноды','/nodes','Раздел'],['Каскад','/cascade','Раздел'],['Маршрутизация','/routing','Раздел'],['Обновления','/updates','Раздел'],['Настройки','/settings','Раздел']];
+const actions=[['Создать заглушку','/settings','Действие'],['Ключи API','/settings','Действие'],['Автобэкап','/settings','Действие'],['Журнал входов и 2FA','/settings','Действие'],['Правила маршрутизации','/routing','Действие']];
+async function loadClients(){if(clients)return;try{const r=await fetch(PATH+'/clients-state',{cache:'no-store'});if(!r.ok||r.redirected)return;const d=await r.json();clients=(d.clients||[]).slice(0,60)}catch(e){}}
+function render(q){
+  q=(q||'').trim().toLowerCase();items=[];
+  const push=(title,sub,path)=>{if(!q||title.toLowerCase().includes(q))items.push({title,sub,path})};
+  sections.forEach(([t,p,s])=>push(t,s,PATH+p));
+  actions.forEach(([t,p,s])=>push(t,s,PATH+p));
+  (clients||[]).forEach(c=>push(c.name,c.kind==='subscription'?'Подписка · клиенты':'Клиент · '+c.protocols.join(', '),PATH+'/users'));
+  const shown=items.slice(0,12);cursor=Math.max(0,Math.min(cursor,shown.length-1));
+  box.innerHTML=shown.map((it,i)=>'<button type="button" class="'+(i===cursor?'selected':'')+'" data-i="'+i+'"><b>'+esc(it.title)+'</b><small>'+esc(it.sub||'')+'</small></button>').join('')||'<p class="palette-empty">Ничего не найдено</p>';}
+function go(i){const it=items[Math.min(items.length,12)-1]&&items[i];if(!it)return;dialog.close();location.href=it.path}
+function open(){if(dialog.open)return;dialog.showModal();input.value='';cursor=0;render();input.focus();loadClients().then(()=>render(input.value))}
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();dialog.open?dialog.close():open()}});
+dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close()});
+input.addEventListener('input',()=>{cursor=0;render(input.value)});
+input.addEventListener('keydown',e=>{
+  const max=Math.min(items.length,12)-1;
+  if(e.key==='ArrowDown'){e.preventDefault();cursor=Math.min(cursor+1,max);render(input.value)}
+  else if(e.key==='ArrowUp'){e.preventDefault();cursor=Math.max(cursor-1,0);render(input.value)}
+  else if(e.key==='Enter'&&items[cursor]){e.preventDefault();go(cursor)}});
+box.addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(!b)return;go(Number(b.dataset.i))});
+})();
+</script>'''
+
+
+def page_layout(title, body, path, active, domain, csrf='', role='admin'):
     links = ''.join(f'<a class="{"active" if key==active else ""}" href="{esc(path)}/{key}">{icon(glyph)}{label}</a>' for key, label, glyph in [('dashboard','Дашборд','grid'),('users','Пользователи','users'),('nodes','Ноды','nodes'),('cascade','Каскад','cascade'),('routing','Маршрутизация','route'),('updates','Обновления','refresh'),('settings','Настройки','settings')])
     social = ''
     banner = f'''<aside id="releaseBanner" class="release-banner" role="status" hidden><span class="release-banner-mark">{icon('refresh')}</span><div class="release-banner-copy"><b>Доступна новая версия Onyx Panel</b><small>Обновление можно установить с автоматической резервной копией</small></div><span id="releaseBannerVersion" class="release-banner-version"></span><div class="release-banner-actions"><a class="btn primary" href="{esc(path)}/updates">Посмотреть</a><button type="button" id="releaseBannerClose" class="release-banner-close" aria-label="Скрыть уведомление">×</button></div></aside>'''
     banner_script = f'''<script>(()=>{{const banner=document.getElementById('releaseBanner'),version=document.getElementById('releaseBannerVersion'),close=document.getElementById('releaseBannerClose');if(!banner)return;function dismissed(v){{try{{return localStorage.getItem('onyx-release-banner:'+v)==='1'}}catch(e){{return false}}}}function show(d){{if(!d||!d.available||!d.latest||dismissed(d.latest)){{banner.hidden=true;return}}banner.dataset.version=d.latest;version.textContent=(d.current||'—')+' → '+d.latest;banner.hidden=false}}async function check(){{try{{const r=await fetch('{esc(path)}/update-status',{{cache:'no-store'}});if(r.ok&&!r.redirected)show(await r.json())}}catch(e){{}}}}close.addEventListener('click',()=>{{const v=banner.dataset.version;if(v)try{{localStorage.setItem('onyx-release-banner:'+v,'1')}}catch(e){{}}banner.hidden=true}});window.addEventListener('onyx-update-status',e=>show(e.detail));check();setInterval(check,30000)}})();</script>'''
-    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body><div class="app"><div class="workspace"><header class="appbar"><div class="appbar-left"><a class="mini-brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel"><img src="{esc(path)}/__logo" alt="" width="38" height="38"></a><div class="host"><i></i>{esc(domain)}</div></div><nav class="topnav" id="topnav" aria-label="Разделы панели">{links}</nav><div class="appbar-tools">{theme_button()}{restart_buttons(path, csrf)}{social}<a class="logout" href="{esc(path)}/logout" aria-label="Выйти">{icon('logout')}<span>Выйти</span></a><button type="button" class="burger" id="navBurger" aria-expanded="false" aria-controls="topnav" aria-label="Открыть меню">{icon('menu')}</button></div></header>{banner}<main>{body}</main></div></div>{COMMON_JS}{banner_script}</body></html>'''
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body data-role="{esc(role)}"><div class="app"><div class="workspace"><header class="appbar"><div class="appbar-left"><a class="mini-brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel"><img src="{esc(path)}/__logo" alt="" width="38" height="38"></a><div class="host"><i></i>{esc(domain)}</div></div><nav class="topnav" id="topnav" aria-label="Разделы панели">{links}</nav><div class="appbar-tools">{theme_button()}{restart_buttons(path, csrf)}{social}<a class="logout" href="{esc(path)}/logout" aria-label="Выйти">{icon('logout')}<span>Выйти</span></a><button type="button" class="burger" id="navBurger" aria-expanded="false" aria-controls="topnav" aria-label="Открыть меню">{icon('menu')}</button></div></header>{banner}<main>{body}</main></div></div><dialog id="paletteDialog" class="palette-dialog" aria-label="Командная палитра"><div class="palette-box"><input id="paletteInput" placeholder="Поиск: разделы, клиенты, действия…" autocomplete="off" spellcheck="false"><div id="paletteResults" class="palette-results" role="listbox"></div><div class="palette-hint">Ctrl+K — открыть · ↑↓ — выбрать · Enter — перейти · Esc — закрыть</div></div></dialog>{COMMON_JS}{PALETTE_JS.replace('@@PATH@@',json.dumps(path))}{banner_script}</body></html>'''
 
 
-def login_ui(path):
-    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>Вход · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body class="login-page"><div class="login-theme">{theme_button()}</div><main class="login-card"><img class="signin-logo" src="{esc(path)}/__logo" alt="Onyx Panel"><h1>Onyx Panel</h1><p>Панель управления подключениями</p><form method="post" action="{esc(path)}/login"><label for="loginName">Логин</label><input id="loginName" name="user" autocomplete="username" required autofocus><label for="loginPassword">Пароль</label><input id="loginPassword" type="password" name="password" autocomplete="current-password" required><button class="primary">Войти</button></form><small class="login-version">{VERSION}</small></main>{COMMON_JS}</body></html>'''
+def login_ui(path, totp=False):
+    code_field = ('<label for="loginCode">Код двухфакторной аутентификации</label>'
+                  '<input id="loginCode" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6"'
+                  ' autocomplete="one-time-code" placeholder="6 цифр из приложения">') if totp else ''
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>Вход · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body class="login-page"><div class="login-theme">{theme_button()}</div><main class="login-card"><img class="signin-logo" src="{esc(path)}/__logo" alt="Onyx Panel"><h1>Onyx Panel</h1><p>Панель управления подключениями</p><form method="post" action="{esc(path)}/login"><label for="loginName">Логин</label><input id="loginName" name="user" autocomplete="username" required autofocus><label for="loginPassword">Пароль</label><input id="loginPassword" type="password" name="password" autocomplete="current-password" required>{code_field}<button class="primary">Войти</button></form><small class="login-version">{VERSION}</small></main>{COMMON_JS}</body></html>'''
 
 
 
@@ -1065,9 +1131,23 @@ def editor_ui(source, path, csrf, presets, has_draft):
     import json as _json
     presets_json=_json.dumps(preset_data,ensure_ascii=False).replace('</',r'<\/')
     return f'''<div class="card editor-presets-card"><div class="card-title"><div><h2>Заглушка главной страницы</h2><p>Выберите готовую страницу, создайте свою или отредактируйте существующую</p></div><div class="actions"><button type="button" class="primary" id="openCustomPreset">{icon("plus")}Создать заглушку</button>{'<span class="pill">Черновик не опубликован</span>' if has_draft else ''}</div></div><div class="preset-grid">{cards}</div><p class="muted" style="font-size:12px;margin-bottom:0">«Применить» сразу публикует заглушку на сайте. Кнопка <b>Редактировать</b> открывает редактирование своей заглушки, <b>Предпросмотр</b> — предпросмотр без публикации.</p></div>
-<dialog id="customPresetDialog" class="create-dialog preset-create-dialog"><div class="dialog-head"><div><h2 id="customPresetTitle">Своя заглушка</h2><small>После сохранения она появится среди остальных заглушек</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><form id="customPresetForm" method="post" action="{esc(path)}/custom-preset"><input type="hidden" name="csrf" value="{esc(csrf)}"><input type="hidden" name="operation" value="create" id="customPresetOp"><input type="hidden" name="preset" value="" id="customPresetId"><div class="form-grid"><div><label for="customPresetName">Название</label><input id="customPresetName" name="name" maxlength="80" required placeholder="Например, Скоро открытие"></div><div><label for="customPresetDescription">Краткое описание</label><input id="customPresetDescription" name="description" maxlength="180" placeholder="Что увидит посетитель"></div></div><label for="customPresetHtml">HTML заглушки</label><div class="editor-bar"><span>index.html</span><i>до 1 МБ</i></div><textarea class="code-editor" id="customPresetHtml" name="html" spellcheck="false" required placeholder="<!doctype html>…"></textarea><div class="actions create-actions"><button type="button" data-close-dialog>Отмена</button><button class="primary" id="customPresetSave">Сохранить</button></div></form></dialog>
+<dialog id="customPresetDialog" class="create-dialog preset-create-dialog"><div class="dialog-head"><div><h2 id="customPresetTitle">Своя заглушка</h2><small>После сохранения она появится среди остальных заглушек</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><form id="customPresetForm" method="post" action="{esc(path)}/custom-preset"><input type="hidden" name="csrf" value="{esc(csrf)}"><input type="hidden" name="operation" value="create" id="customPresetOp"><input type="hidden" name="preset" value="" id="customPresetId"><div class="form-grid"><div><label for="customPresetName">Название</label><input id="customPresetName" name="name" maxlength="80" required placeholder="Например, Скоро открытие"></div><div><label for="customPresetDescription">Краткое описание</label><input id="customPresetDescription" name="description" maxlength="180" placeholder="Что увидит посетитель"></div></div><label for="customPresetHtml">HTML заглушки</label><div class="editor-columns"><div class="editor-col"><div class="editor-bar"><span>index.html</span><i>до 1 МБ</i></div><textarea class="code-editor" id="customPresetHtml" name="html" spellcheck="false" required placeholder="<!doctype html>…"></textarea></div><div class="editor-col"><div class="preset-live-bar"><span>Предпросмотр</span><i>обновляется при вводе</i></div><iframe id="customPresetLive" class="preset-live-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Живой предпросмотр заглушки"></iframe></div></div><div class="actions create-actions"><button type="button" data-close-dialog>Отмена</button><button class="primary" id="customPresetSave">Сохранить</button></div></form></dialog>
 <dialog id="previewDialog" class="preview-dialog"><div class="preview-top"><strong>Предпросмотр заглушки</strong><div class="actions"><div class="range"><button type="button" class="selected" id="previewDesktop">Компьютер</button><button type="button" id="previewPhone">Телефон</button></div><button type="button" data-close-dialog aria-label="Закрыть предпросмотр">×</button></div></div><div id="previewStage" class="preview-stage"><iframe id="landingPreview" title="Изолированный предпросмотр заглушки" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe></div><p class="preview-caption">Изолированный предпросмотр · рабочий сайт не изменён</p></dialog>
-<script>(()=>{{const presets={presets_json};const cp=document.getElementById('customPresetDialog'),cpf=document.getElementById('customPresetForm'),cpOp=document.getElementById('customPresetOp'),cpId=document.getElementById('customPresetId'),cpName=document.getElementById('customPresetName'),cpDesc=document.getElementById('customPresetDescription'),cpHtml=document.getElementById('customPresetHtml'),cpTitle=document.getElementById('customPresetTitle'),cpSave=document.getElementById('customPresetSave');document.getElementById('openCustomPreset').addEventListener('click',()=>{{cpOp.value='create';cpId.value='';cpTitle.textContent='Своя заглушка';cpSave.textContent='Создать заглушку';cpName.value='';cpDesc.value='';cpHtml.value='';cp.showModal();setTimeout(()=>cpName.focus(),30)}});document.querySelectorAll('[data-edit-preset]').forEach(b=>b.addEventListener('click',()=>{{const p=presets[b.dataset.editPreset];if(!p)return;cpOp.value='save';cpId.value=b.dataset.editPreset;cpTitle.textContent='Редактирование заглушки';cpSave.textContent='Сохранить изменения';cpName.value=p.name;cpDesc.value=p.description;cpHtml.value=p.html;cp.showModal();setTimeout(()=>cpName.focus(),30)}}));cpf.addEventListener('submit',e=>{{if(!cpName.value.trim()||!cpHtml.value.trim()){{e.preventDefault();return}}cpSave.disabled=true;cpSave.textContent='Сохраняем…'}});const pd=document.getElementById('previewDialog'),pf=document.getElementById('landingPreview');document.querySelectorAll('[data-preview-preset]').forEach(b=>b.addEventListener('click',async()=>{{const p=presets[b.dataset.previewPreset];if(!p||!p.html)return;b.disabled=true;try{{const r=await fetch('{esc(path)}/preview-html',{{method:'POST',body:new URLSearchParams({{csrf:'{esc(csrf)}',html:p.html}})}});if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');if(!r.ok){{let msg='Ошибка предпросмотра ('+r.status+').';try{{msg=(await r.json()).message||msg}}catch(_){{}}throw new Error(msg)}}let d;try{{d=await r.json()}}catch(e){{throw new Error('Панель вернула некорректный ответ.')}}if(!d.document)throw new Error('Ошибка предпросмотра.');pf.srcdoc=d.document;pd.showModal()}}catch(err){{alert(err.message)}}finally{{b.disabled=false}}}}));['Desktop','Phone'].forEach(mode=>document.getElementById('preview'+mode).addEventListener('click',()=>{{document.getElementById('previewStage').classList.toggle('phone',mode==='Phone');['Desktop','Phone'].forEach(m=>document.getElementById('preview'+m).classList.toggle('selected',m===mode))}}));pd.addEventListener('close',()=>pf.removeAttribute('srcdoc'))}})();</script>''' + PRESET_THUMBS_JS.replace('@@PRESETS@@',presets_json)
+<script>(()=>{{const presets={presets_json};const cp=document.getElementById('customPresetDialog'),cpf=document.getElementById('customPresetForm'),cpOp=document.getElementById('customPresetOp'),cpId=document.getElementById('customPresetId'),cpName=document.getElementById('customPresetName'),cpDesc=document.getElementById('customPresetDescription'),cpHtml=document.getElementById('customPresetHtml'),cpTitle=document.getElementById('customPresetTitle'),cpSave=document.getElementById('customPresetSave');document.getElementById('openCustomPreset').addEventListener('click',()=>{{cpOp.value='create';cpId.value='';cpTitle.textContent='Своя заглушка';cpSave.textContent='Создать заглушку';cpName.value='';cpDesc.value='';cpHtml.value='';cp.showModal();setTimeout(()=>cpName.focus(),30)}});document.querySelectorAll('[data-edit-preset]').forEach(b=>b.addEventListener('click',()=>{{const p=presets[b.dataset.editPreset];if(!p)return;cpOp.value='save';cpId.value=b.dataset.editPreset;cpTitle.textContent='Редактирование заглушки';cpSave.textContent='Сохранить изменения';cpName.value=p.name;cpDesc.value=p.description;cpHtml.value=p.html;cp.showModal();setTimeout(()=>cpName.focus(),30)}}));cpf.addEventListener('submit',e=>{{if(!cpName.value.trim()||!cpHtml.value.trim()){{e.preventDefault();return}}cpSave.disabled=true;cpSave.textContent='Сохраняем…'}});const pd=document.getElementById('previewDialog'),pf=document.getElementById('landingPreview');document.querySelectorAll('[data-preview-preset]').forEach(b=>b.addEventListener('click',async()=>{{const p=presets[b.dataset.previewPreset];if(!p||!p.html)return;b.disabled=true;try{{const r=await fetch('{esc(path)}/preview-html',{{method:'POST',body:new URLSearchParams({{csrf:'{esc(csrf)}',html:p.html}})}});if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');if(!r.ok){{let msg='Ошибка предпросмотра ('+r.status+').';try{{msg=(await r.json()).message||msg}}catch(_){{}}throw new Error(msg)}}let d;try{{d=await r.json()}}catch(e){{throw new Error('Панель вернула некорректный ответ.')}}if(!d.document)throw new Error('Ошибка предпросмотра.');pf.srcdoc=d.document;pd.showModal()}}catch(err){{alert(err.message)}}finally{{b.disabled=false}}}}));['Desktop','Phone'].forEach(mode=>document.getElementById('preview'+mode).addEventListener('click',()=>{{document.getElementById('previewStage').classList.toggle('phone',mode==='Phone');['Desktop','Phone'].forEach(m=>document.getElementById('preview'+m).classList.toggle('selected',m===mode))}}));pd.addEventListener('close',()=>pf.removeAttribute('srcdoc'))}})();</script>''' + PRESET_THUMBS_JS.replace('@@PRESETS@@',presets_json) + PRESET_LIVE_JS
+
+
+# Live preview pane of the custom stub editor: re-renders the sandboxed
+# iframe as the admin types (debounced), same isolation as the card thumbs.
+PRESET_LIVE_JS='''<script>
+(()=>{const html=document.getElementById('customPresetHtml'),frame=document.getElementById('customPresetLive'),dialog=document.getElementById('customPresetDialog');
+if(!html||!frame||!dialog)return;
+let timer=0;
+const render=()=>{clearTimeout(timer);timer=setTimeout(()=>{frame.srcdoc=html.value},450)};
+html.addEventListener('input',render);
+dialog.addEventListener('close',()=>{clearTimeout(timer);frame.removeAttribute('srcdoc')});
+document.querySelectorAll('[data-edit-preset]').forEach(b=>b.addEventListener('click',()=>render()));
+})();
+</script>'''
 
 
 def openflux_ui(state, path, csrf):
@@ -1167,6 +1247,28 @@ setInterval(refresh,5000);setInterval(updateClock,1000);setInterval(()=>fetch('{
 </script>'''
 
 
+def _top_consumers_card(path, profiles, traffic, limit=5):
+    """Card with the profiles that used the most traffic (lifetime counters)."""
+    rows = []
+    for user in (profiles or []):
+        item = (traffic or {}).get(str(user.get('id', '')), {})
+        up = max(0, int(item.get('up', 0)))
+        down = max(0, int(item.get('down', 0)))
+        if up + down > 0:
+            rows.append({'name': str(user.get('name') or '?'), 'up': up, 'down': down, 'total': up + down})
+    rows.sort(key=lambda r: -r['total'])
+    rows = rows[:limit]
+    if not rows:
+        return ''
+    items = ''.join(
+        f'<a class="top-row" href="{esc(path)}/users"><span class="client-initial">{esc(r["name"][:1].upper() or "?")}</span>'
+        f'<span class="top-name">{esc(r["name"])}<small>↑ {size(r["up"])} · ↓ {size(r["down"])}</small></span>'
+        f'<b>{size(r["total"])}</b></a>' for r in rows)
+    return (f'<section class="card" data-live-block="top"><div class="card-title"><div><h2>Топ потребителей трафика</h2>'
+            f'<p>Профили с наибольшим объёмом за всё время наблюдения</p></div></div>'
+            f'<div class="top-list">{items}</div></section>')
+
+
 def dashboard_body(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours=1):
     """Dashboard overview without version management controls."""
     body = _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours)
@@ -1174,8 +1276,12 @@ def dashboard_body(data, subs, profiles, traffic, path, domain, csrf, proxy_link
                    f'<a class="btn quiet" href="{esc(path)}/updates">{icon("refresh")}Управление обновлениями</a>'
                    f'</div><p>Версии панели, Xray и OpenFlux находятся в отдельном разделе.</p></div>'
                    f'</section></div><div class="two-col equal">')
-    return re.sub(r'<div class="update-box">.*?</div></section></div><section class="card version-manager">.*?</section><div class="two-col equal">',
+    body = re.sub(r'<div class="update-box">.*?</div></section></div><section class="card version-manager">.*?</section><div class="two-col equal">',
                   replacement, body, count=1, flags=re.S)
+    top = _top_consumers_card(path, profiles, traffic)
+    if top:
+        body = body + top
+    return body
 
 
 def dashboard_page(body, path, csrf):
@@ -1369,6 +1475,8 @@ function statePatch(d){
     if(tpl.content.firstElementChild)check.replaceWith(tpl.content.firstElementChild)}
   const job=card.querySelector('[data-job]');
   if(job)job.innerHTML=d.job_html||'';
+  const speed=card.querySelector('[data-speed]');
+  if(speed&&d.speed_html!==undefined)speed.innerHTML=d.speed_html||'';
   return true}
 let liveTimer=null;
 function startLive(){
@@ -1385,6 +1493,27 @@ function startLive(){
       if(unknown)location.reload();
     }catch(e){}},3000);}
 startLive();
+const failoverSwitch=document.querySelector('[data-failover-switch]');
+if(failoverSwitch)failoverSwitch.addEventListener('click',async()=>{
+  if(failoverSwitch.disabled)return;
+  const previous=failoverSwitch.getAttribute('aria-checked');
+  failoverSwitch.disabled=true;
+  try{const res=await post('failover-toggle',{enabled:previous==='true'?'0':'1'});
+    failoverSwitch.setAttribute('aria-checked',previous==='true'?'false':'true');
+    if(window.onyxToast)onyxToast(res.message||'Сохранено.');}
+  catch(e){if(window.onyxToast)onyxToast(e.message,'err')}
+  finally{failoverSwitch.disabled=false}});
+document.querySelectorAll('[data-cascade-speed]').forEach(button=>{
+  button.addEventListener('click',async()=>{
+    if(button.disabled)return;
+    const card=button.closest('[data-cascade]'),out=card.querySelector('[data-speed]');
+    const old=button.innerHTML;button.disabled=true;button.textContent='Замеряю…';
+    if(out)out.innerHTML='<span class="cascade-latency">Замер скорости выполняется — до 30 секунд…</span>';
+    try{await post('cascade-speed',{id:card.dataset.cascade});}
+    catch(e){if(window.onyxToast)onyxToast(e.message,'err');
+      if(out)out.innerHTML='<span class="cascade-latency err">'+String(e.message).replace(/[&<>]/g,'')+'</span>'}
+    finally{button.disabled=false;button.innerHTML=old}});
+});
 document.querySelectorAll('[data-cascade-ping]').forEach(button=>{
   button.addEventListener('click',async()=>{
     if(button.disabled)return;
@@ -1461,6 +1590,19 @@ def cascade_check_html(item):
     return '<span class="cascade-latency" data-check>Ещё не проверялся</span>'
 
 
+def cascade_speed_html(item):
+    """One-line result of the background throughput measurement."""
+    speed=item.get('speed') or {}
+    if not isinstance(speed,dict) or not speed:
+        return ''
+    when=' · '+time.strftime('%d.%m.%Y %H:%M',time.localtime(speed['checked_at'])) if speed.get('checked_at') else ''
+    if speed.get('ok'):
+        return f'<span class="cascade-latency ok">↓ {esc(speed.get("mbps"))} Мбит/с · {esc(speed.get("seconds"))} c{when}</span>'
+    if speed.get('message'):
+        return f'<span class="cascade-latency err">Замер не удался: {esc(speed.get("message"))}{when}</span>'
+    return ''
+
+
 def cascade_state_view(item, carriers=None):
     """Display state of one cascade card, shared by the page render and the
     /cascade-state JSON the live poller patches the DOM with."""
@@ -1480,7 +1622,8 @@ def cascade_state_view(item, carriers=None):
     return {'id':item.get('id'),'state_text':state,'state_class':state_class,
             'switch_checked':str(enabled).lower(),
             'switch_title':'Отключить каскад' if enabled else 'Включить каскад',
-            'check_html':cascade_check_html(item),'job_html':job,'pending':pending}
+            'check_html':cascade_check_html(item),'job_html':job,'pending':pending,
+            'speed_html':cascade_speed_html(item)}
 
 
 CASCADE_PROTO_LABELS={'vless':('VLESS','proto-vless'),'hysteria':('Hysteria2','proto-hysteria')}
@@ -1507,17 +1650,18 @@ def cascade_card(item, vless_users, path, csrf):
                      '<div class="cascade-clients-grid">'+''.join(rows)+'</div></div>')
     else:
         users_block='<div class="cascade-clients" data-users-block><p class="sub">VLESS и Hysteria2 клиентов нет. Создайте их в разделе «Пользователи».</p></div>'
-    return f'''<div class="card cascade-card" data-cascade="{sid}" data-pending="{int(pending)}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {view["state_class"]}">{view["state_text"]}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled_bool else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{view["switch_checked"]}" title="{view["switch_title"]}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{view["check_html"]}</div><div class="cascade-check cascade-job" data-job>{view["job_html"]}</div><details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="cascade-mode"><label class="choice-card"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}><span><strong>{icon("cascade")}Все VLESS и Hysteria2</strong><small>Клиенты VLESS и Hysteria2 пойдут через каскад</small></span></label><label class="choice-card"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}><span><strong>{icon("users")}Только выбранные</strong><small>Через каскад пойдут отмеченные, остальные — напрямую</small></span></label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
+    return f'''<div class="card cascade-card" data-cascade="{sid}" data-pending="{int(pending)}"><div class="cascade-head"><div><h2>{esc(item.get("name"))}</h2><div class="cascade-meta"><span class="pill">{esc(item.get("transport"))}</span><span class="cascade-endpoint">{esc(item.get("address"))}:{int(item.get("port",443))}</span><span class="badge {view["state_class"]}">{view["state_text"]}</span></div></div><div class="actions"><button type="button" data-cascade-ping>{icon("refresh")}Проверить</button><button type="button" data-cascade-speed>{icon("chart")}Замер скорости</button><form method="post" action="{esc(path)}/cascade-toggle" data-cascade-toggle>{hidden(csrf,id=item["id"],operation='disable' if enabled_bool else 'enable')}<button type="button" class="access-switch" role="switch" aria-label="Каскад {esc(item.get("name"))}" aria-checked="{view["switch_checked"]}" title="{view["switch_title"]}"></button></form><form method="post" action="{esc(path)}/cascade-delete" data-confirm="Удалить каскад «{esc(item.get("name"))}»? Клиенты мгновенно вернутся на прямое подключение.">{hidden(csrf,id=item["id"])}<button type="submit" class="icon-btn danger" aria-label="Удалить каскад {esc(item.get("name"))}" title="Удалить">{icon("trash")}</button></form></div></div><div class="cascade-check">{view["check_html"]}</div><div class="cascade-check" data-speed>{view["speed_html"]}</div><div class="cascade-check cascade-job" data-job>{view["job_html"]}</div><details class="cascade-section"><summary>Режим и клиенты</summary><form data-cascade-users>{hidden(csrf,id=item["id"])}<div class="cascade-mode"><label class="choice-card"><input type="radio" name="mode" value="all" {"checked" if mode=="all" else ""}><span><strong>{icon("cascade")}Все VLESS и Hysteria2</strong><small>Клиенты VLESS и Hysteria2 пойдут через каскад</small></span></label><label class="choice-card"><input type="radio" name="mode" value="users" {"checked" if mode=="users" else ""}><span><strong>{icon("users")}Только выбранные</strong><small>Через каскад пойдут отмеченные, остальные — напрямую</small></span></label></div>{users_block}<button class="primary">Сохранить</button><p class="cascade-status" data-form-status role="status"></p></form></details></div>'''
 
 
-def cascade_ui(items, users, path, csrf, domain):
+def cascade_ui(items, users, path, csrf, domain, failover=False):
     vless_users=[{'id':user['id'],'name':user.get('name',''),'protocol':user.get('protocol','')} for user in (users or [])
                  if user.get('protocol') in ('vless','hysteria') and user.get('enabled',True) and isinstance(user.get('id'),str)]
     cards=''.join(cascade_card(item,vless_users,path,csrf) for item in (items or []))
     listing=cards if cards else '<section class="card empty">Каскадов нет. Вставьте vless:// ключ клиента верхней панели — трафик этой панели начнёт выходить через неё.</section>'
     help_note=f'''<details class="note cascade-help"><summary>Как работает каскад</summary><p>Каскад — это аутбаунд Xray: клиенты по-прежнему подключаются к <code>{esc(domain)}</code>, но их трафик уходит в интернет через верхнюю панель. Отключение каскада мгновенно возвращает прямое подключение. Каскадируются <b>VLESS и Hysteria2</b>; UDP внутри Hysteria2 едет через каскад как UDP-over-TCP — на обеих панелях должен быть современный Xray (в Onyx он такой). AmneziaWG, MTProto, WEB Proxy и OpenFlux идут напрямую всегда: их трафик технически не проходит через Xray.</p><p>Режим «Все VLESS и Hysteria2» перенаправляет клиентов обоих протоколов, «Только выбранные» — отмеченных. Если несколько каскадов претендуют на один и тот же трафик, работает тот, что выше в списке, а правило по конкретному клиенту сильнее общего режима.</p><p>Не направляйте две панели друг на друга в режиме «Все» — получится петля: на ответственной панели включите режим выбранных клиентов и не выбирайте ключ, который обслуживает нижнюю панель. Цепочка из трёх и более панелей собирается сама, если у верхней панели настроен собственный каскад.</p></details>'''
     add_dialog=f'''<dialog id="cascadeAdd"><div class="dialog-head"><div><h2>Новый каскад</h2><small>Ключ клиента верхней панели</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><form id="cascadeAddForm">{hidden(csrf)}<label for="cascadeLink">vless:// ключ</label><textarea id="cascadeLink" name="link" rows="4" required spellcheck="false" placeholder="vless://…"></textarea><label for="cascadeName">Название — необязательно</label><input id="cascadeName" name="name" maxlength="80" autocomplete="off" placeholder="Из метки ключа или адрес сервера"><p class="note">Скопируйте ключ в разделе «Пользователи» верхней панели Onyx или в любой другой Xray-панели. Понимаются транспорты TCP, WebSocket, gRPC, XHTTP, HTTPUpgrade и HTTP/2, защита TLS и Reality. После добавления каскад сразу включается в режиме «Все VLESS и Hysteria2» и проверяется живым запросом.</p><p class="cascade-status" data-form-status role="status"></p><div class="actions create-actions"><button type="button" data-close-dialog>Отмена</button><button class="primary">Проверить и добавить</button></div></form></dialog>'''
-    return f'''<div class="page-head"><div><h1>Каскад</h1><p>Выпуск трафика через другие панели</p></div><div class="actions"><button class="primary" id="addCascade">＋ Добавить каскад</button></div></div>{help_note}{listing}{add_dialog}{CASCADE_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',json.dumps(csrf))}'''
+    failover_note='<span class="failover-note">Автопереключение следит за активным каскадом «Все»: два неудачных пинга подряд — клиенты автоматически уходят на резервный каскад, событие приходит в Telegram, если настроен.</span>' if failover else ''
+    return f'''<div class="page-head"><div><h1>Каскад</h1><p>Выпуск трафика через другие панели</p></div><div class="actions"><label class="failover-toggle" title="Автопереключение на резервный каскад при сбое активного"><button type="button" class="access-switch" data-failover-switch role="switch" aria-label="Автопереключение при сбое" aria-checked="{str(bool(failover)).lower()}"></button><span>Автопереключение</span></label><button class="primary" id="addCascade">＋ Добавить каскад</button></div></div>{help_note}{failover_note}{listing}{add_dialog}{CASCADE_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',json.dumps(csrf))}'''
 
 
 def updates_ui(path, csrf, current):

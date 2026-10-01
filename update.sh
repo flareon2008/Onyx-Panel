@@ -23,7 +23,7 @@ LOCAL_SOURCE="$(cd "$(dirname "$0")" && pwd)"
 if [[ ! -s "$LOCAL_SOURCE/install-final.sh" && -d /opt/onyx-panel-package ]]; then
     LOCAL_SOURCE="/opt/onyx-panel-package"
 fi
-for file in install-final.sh install-panel.sh install-core.sh uninstall-onyx-panel.sh repair-landing-pages.sh onyx-logo.png onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py; do
+for file in install-final.sh install-panel.sh install-core.sh uninstall-onyx-panel.sh repair-landing-pages.sh onyx-logo.png onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
     [[ -s "$LOCAL_SOURCE/$file" ]] || { echo "Incomplete local archive: $file is missing." >&2; exit 1; }
 done
 [[ -s "$LOCAL_SOURCE/assets/OpenFlux-linux-amd64" || -s "$LOCAL_SOURCE/OpenFlux-linux-amd64" ]] || {

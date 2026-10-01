@@ -369,77 +369,156 @@ def wait_for_port(port, process, deadline=5.0):
     return False
 
 
+class _Probe:
+    """Context manager: one Xray process with a local SOCKS inbound that exits
+    through the cascade. Yields the local port or None when the tunnel could
+    not be raised (message carried in .error)."""
+
+    def __init__(self, record, xray_bin=XRAY_BIN):
+        self.record = record
+        self.xray_bin = xray_bin
+        self.port = None
+        self.error = ''
+        self._process = None
+        self._tmpdir = None
+
+    def __enter__(self):
+        try:
+            with socket.socket() as holder:
+                holder.bind(('127.0.0.1', 0))
+                self.port = holder.getsockname()[1]
+        except OSError:
+            self.error = 'Не удалось занять локальный порт для проверки.'
+            return self
+        outbound = build_outbound(self.record, 'cascade-probe')
+        config = {'log': {'loglevel': 'warning'},
+                  'inbounds': [{'tag': 'probe', 'listen': '127.0.0.1', 'port': self.port,
+                                'protocol': 'socks', 'settings': {'auth': 'noauth', 'udp': False}}],
+                  'outbounds': [outbound, {'tag': 'direct', 'protocol': 'freedom'}]}
+        self._tmpdir = tempfile.TemporaryDirectory(prefix='onyx-cascade-')
+        try:
+            path = os.path.join(self._tmpdir.name, 'probe.json')
+            with open(path, 'w', encoding='utf-8') as stream:
+                json.dump(config, stream, ensure_ascii=True)
+            self._process = subprocess.Popen([self.xray_bin, 'run', '-config', path],
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        except OSError:
+            self.error = 'Не удалось запустить Xray для проверки каскада.'
+            self._close()
+            return self
+        if not wait_for_port(self.port, self._process):
+            stderr = b''
+            try:
+                stderr = self._process.stderr.read() or b''
+            except Exception:
+                pass
+            detail = stderr.decode('utf-8', 'replace').strip()[-300:]
+            self.error = 'Xray не поднял туннель проверки: ' + (detail or 'процесс завершился без ошибок.')
+            self._close()
+            return self
+        return self
+
+    def __exit__(self, *exc):
+        self._close()
+        return False
+
+    def _close(self):
+        if self._tmpdir is not None:
+            try:
+                self._tmpdir.cleanup()
+            except Exception:
+                pass
+            self._tmpdir = None
+        if self._process is not None:
+            try:
+                self._process.terminate()
+                self._process.wait(timeout=3)
+            except Exception:
+                try:
+                    self._process.kill()
+                except Exception:
+                    pass
+            self._process = None
+
+    def fetch(self, curl_bin, url, max_time, extra=(), timeout=None, discard=True):
+        """Run curl through the tunnel; returns CompletedProcess."""
+        command = [curl_bin, '-sS']
+        if discard:
+            command += ['-o', os.devnull]
+        command += ['--socks5-hostname', '127.0.0.1:%d' % self.port,
+                    '--max-time', str(max_time), *extra, url]
+        return subprocess.run(command, capture_output=True, text=True,
+                              timeout=timeout or int(max_time) + 3)
+
+
 def ping(record, xray_bin=XRAY_BIN, curl_bin='curl'):
     """Reachability test through the full cascade chain: Xray to the upstream,
     then an HTTP request exiting on the far side. Measures round-trip time."""
     checked_at = int(time.time())
-    outbound = build_outbound(record, 'cascade-probe')
     probe = {'ok': False, 'ms': 0, 'message': '', 'checked_at': checked_at}
-    process = None
-    try:
-        with socket.socket() as holder:
-            holder.bind(('127.0.0.1', 0))
-            port = holder.getsockname()[1]
-        config = {'log': {'loglevel': 'warning'},
-                  'inbounds': [{'tag': 'probe', 'listen': '127.0.0.1', 'port': port,
-                                'protocol': 'socks', 'settings': {'auth': 'noauth', 'udp': False}}],
-                  'outbounds': [outbound, {'tag': 'direct', 'protocol': 'freedom'}]}
-        with tempfile.TemporaryDirectory(prefix='onyx-cascade-') as directory:
-            path = os.path.join(directory, 'probe.json')
-            with open(path, 'w', encoding='utf-8') as stream:
-                json.dump(config, stream, ensure_ascii=True)
-            try:
-                process = subprocess.Popen([xray_bin, 'run', '-config', path],
-                                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-            except OSError:
-                probe['message'] = 'Не удалось запустить Xray для проверки каскада.'
-                return probe
-            if not wait_for_port(port, process):
-                stderr = b''
-                try:
-                    stderr = process.stderr.read() or b''
-                except Exception:
-                    pass
-                detail = stderr.decode('utf-8', 'replace').strip()[-300:]
-                probe['message'] = 'Xray не поднял туннель проверки: ' + (detail or 'процесс завершился без ошибок.')
-                return probe
-            try:
-                result = subprocess.run(
-                    [curl_bin, '-sS', '-o', os.devnull, '--socks5-hostname', '127.0.0.1:%d' % port,
-                     '--max-time', '9', '-w', '%{http_code} %{time_total}', PING_URL],
-                    capture_output=True, text=True, timeout=12)
-            except subprocess.TimeoutExpired:
-                probe['message'] = 'Трафик не прошёл через каскад за отведённое время.'
-                return probe
-            if result.returncode:
-                probe['message'] = 'Каскад не отвечает: ' + (result.stderr or '').strip()[-200:]
-                return probe
-            fields = (result.stdout or '').split()
-            code = int(fields[0]) if fields and fields[0].isdigit() else 0
-            seconds = float(fields[1]) if len(fields) > 1 and fields[1].replace('.', '', 1).isdigit() else 0.0
-            if not 200 <= code < 400:
-                probe['message'] = 'Через каскад пришёл ответ HTTP %s.' % (code or '?')
-                return probe
-            probe.update({'ok': True, 'ms': int(seconds * 1000)})
-            # Report the exit IP the upstream gives out: admins check it against
-            # whatismyip-style sites to confirm the cascade is really applied.
-            try:
-                ipresult = subprocess.run(
-                    [curl_bin, '-sS', '--max-time', '6', '--socks5-hostname', '127.0.0.1:%d' % port,
-                     'https://api.ipify.org'], capture_output=True, text=True, timeout=9)
-                exit_ip = (ipresult.stdout or '').strip()
-                if ipresult.returncode == 0 and re.fullmatch(r'[0-9.]{7,15}', exit_ip):
-                    probe['exit_ip'] = exit_ip
-            except Exception:
-                pass
+    with _Probe(record, xray_bin) as tunnel:
+        if tunnel.port is None:
+            probe['message'] = tunnel.error
             return probe
-    finally:
-        if process is not None:
-            try:
-                process.terminate()
-                process.wait(timeout=3)
-            except Exception:
-                try:
-                    process.kill()
-                except Exception:
-                    pass
+        try:
+            result = tunnel.fetch(curl_bin, PING_URL, 9,
+                                  extra=('-w', '%{http_code} %{time_total}'), timeout=12)
+        except subprocess.TimeoutExpired:
+            probe['message'] = 'Трафик не прошёл через каскад за отведённое время.'
+            return probe
+        if result.returncode:
+            probe['message'] = 'Каскад не отвечает: ' + (result.stderr or '').strip()[-200:]
+            return probe
+        fields = (result.stdout or '').split()
+        code = int(fields[0]) if fields and fields[0].isdigit() else 0
+        seconds = float(fields[1]) if len(fields) > 1 and fields[1].replace('.', '', 1).isdigit() else 0.0
+        if not 200 <= code < 400:
+            probe['message'] = 'Через каскад пришёл ответ HTTP %s.' % (code or '?')
+            return probe
+        probe.update({'ok': True, 'ms': int(seconds * 1000)})
+        # Report the exit IP the upstream gives out: admins check it against
+        # whatismyip-style sites to confirm the cascade is really applied.
+        try:
+            ipresult = tunnel.fetch(curl_bin, 'https://api.ipify.org', 6, timeout=9, discard=False)
+            exit_ip = (ipresult.stdout or '').strip()
+            if ipresult.returncode == 0 and re.fullmatch(r'[0-9.]{7,15}', exit_ip):
+                probe['exit_ip'] = exit_ip
+        except Exception:
+            pass
+        return probe
+
+
+def speedtest(record, xray_bin=XRAY_BIN, curl_bin='curl', megabytes=15):
+    """Download megabytes through the cascade and report the throughput.
+
+    Uses the same throwaway tunnel as ping(); the probe file is fetched from
+    Cloudflare's speed endpoint and curl reports the average download rate.
+    """
+    result = {'ok': False, 'mbps': 0.0, 'seconds': 0.0, 'message': '', 'checked_at': int(time.time())}
+    megabytes = min(max(int(megabytes), 1), 100)
+    with _Probe(record, xray_bin) as tunnel:
+        if tunnel.port is None:
+            result['message'] = tunnel.error
+            return result
+        try:
+            download = tunnel.fetch(
+                curl_bin, 'https://speed.cloudflare.com/__down?bytes=%d' % (megabytes * 1000000),
+                30, extra=('-w', '%{speed_download} %{time_total}'), timeout=35)
+        except subprocess.TimeoutExpired:
+            result['message'] = 'Замер не уложился в отведённое время — канал слишком медленный.'
+            return result
+        if download.returncode:
+            result['message'] = 'Загрузка через каскад не удалась: ' + (download.stderr or '').strip()[-200:]
+            return result
+        fields = (download.stdout or '').split()
+        try:
+            rate = float(fields[0]) if fields else 0.0
+            seconds = float(fields[1]) if len(fields) > 1 and fields[1].replace('.', '', 1).isdigit() else 0.0
+        except ValueError:
+            result['message'] = 'Каскад вернул некорректный ответ замера.'
+            return result
+        if rate <= 0:
+            result['message'] = 'Через каскад не пришло ни одного байта.'
+            return result
+        result.update({'ok': True, 'mbps': round(rate * 8 / 1000000, 1), 'seconds': round(seconds, 2)})
+        return result

@@ -112,7 +112,7 @@ fi
 MTPROTO_HOST="${MTPROTO_HOST:-$DOMAIN}"
 [[ -s "$PRIMARY_SECRET" ]] || die "Primary install-time secret not found."
 [[ -s "$LOGO_SOURCE" ]] || die "Panel logo file is missing: onyx-logo.png"
-for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py; do
+for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
     [[ -s "$BASE/$module" ]] || die "Missing panel module: $module; extract the complete archive."
 done
 FLAG_ARCHIVE="$BASE/onyx-panel/flags.tar.gz"
@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.5.4..."
+    echo "Updating Onyx Panel 1.6.0..."
 else
-    echo "Configuring Onyx Panel 1.5.4..."
+    echo "Configuring Onyx Panel 1.6.0..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -478,7 +478,7 @@ fi
 
 echo "[1/6] Writing manager..."
 
-for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py; do
+for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
     [[ -s "$BASE/$module" ]] || die "Package is incomplete: $module is missing."
     install -o root -g root -m 0644 "$BASE/$module" "$APP_DIR/$module"
 done
@@ -1724,6 +1724,11 @@ import onyx_openflux as openflux
 import onyx_awg as awg
 import onyx_cascade as cascade_api
 import onyx_routing as routing_api
+import onyx_telegram as telegram_api
+import onyx_totp
+import onyx_access
+import onyx_webapi
+import onyx_failover
 
 HOST="127.0.0.1"
 PORT=8090
@@ -1774,6 +1779,9 @@ if not os.path.exists(KEY):
 with open(KEY,"rb") as f: SESSION_KEY=f.read()
 os.chmod(KEY,0o600)
 STATE_LOCK=threading.RLock()
+# Role of the request's session ("admin"/"observer"), resolved by auth() and
+# read by layout() from the same request thread.
+ROLE_LOCAL=threading.local()
 # Cascade background jobs serialize on this lock: the manager holds its own
 # exclusive lock during the Xray restart, so parallel jobs would just queue.
 APPLY_LOCK=threading.Lock()
@@ -2131,7 +2139,7 @@ def cascade_detail(exc):
     lines=[line.strip() for line in str(exc).strip().splitlines() if line.strip()]
     return (lines[-1].replace("RuntimeError: ","") if lines else "") or str(exc) or "ошибка применения конфигурации"
 
-def cascade_touch(uid=None,check=None,pending=None,op_error=None):
+def cascade_touch(uid=None,check=None,pending=None,op_error=None,speed=None):
     """Update background-job bookkeeping fields on one or all cascades."""
     with STATE_LOCK:
         cascades=cascade_api.load_cascades(CASCADES_FILE)
@@ -2140,6 +2148,7 @@ def cascade_touch(uid=None,check=None,pending=None,op_error=None):
             if check is not None: c["last_check"]=check
             if pending is not None: c["pending"]=pending
             if op_error is not None: c["op_error"]=op_error
+            if speed is not None: c["speed"]=speed
         cascade_api.save_cascades(CASCADES_FILE,cascades)
 
 def cascade_apply_bg(uid,snapshot):
@@ -2280,8 +2289,31 @@ def proxy_link(protocol,secret,port=443,name="Proxy",username=""):
 def qr_png_bytes(link):
     return subprocess.run([QR,"-o","-","-t","PNG","-s","6","-m","2",link],
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=10).stdout
+
+def web_api_clients():
+    """Profiles as seen by the external API: id, traffic, expiry and link."""
+    expires=load().get("expires",{})
+    tr=traffic()
+    out=[]
+    for u in users():
+        uid=str(u.get("id",""))
+        if not uid: continue
+        info=traffic_info(uid,tr)
+        link=""
+        try: link=proxy_link(u.get("protocol","web"),u.get("secret",""),int(u.get("backend_port",443)),u.get("name",""),u.get("username",""))
+        except Exception: pass
+        out.append({"id":uid,"name":u.get("name",""),"protocol":u.get("protocol","web"),
+                    "enabled":bool(u.get("enabled",True)),"up":info["up"],"down":info["down"],
+                    "total":info["total"],"expires":expires.get(uid),"link":link})
+    return out
+
+def web_api_find(uid):
+    uid=onyx_webapi.normalize_uid(uid)
+    for u in users():
+        if str(u.get("id",""))==uid: return u
+    raise ValueError("Клиент не найден.")
 def layout(title,body,active="",csrf=""):
-    return page_layout(title,body,PANEL_PATH,active,DOMAIN,csrf)
+    return page_layout(title,body,PANEL_PATH,active,DOMAIN,csrf,getattr(ROLE_LOCAL,"value","admin") or "admin")
 
 class Handler(BaseHTTPRequestHandler):
     timeout=20
@@ -2324,9 +2356,16 @@ class Handler(BaseHTTPRequestHandler):
         try:
             x,_=v.value.rsplit(".",1)
             issued=int(x.split("-",1)[0])
-            return secrets.compare_digest(sign(x),v.value) and 0 <= time.time()-issued < 86400
+            ok=secrets.compare_digest(sign(x),v.value) and 0 <= time.time()-issued < 86400
         except Exception:
             return False
+        if ok:
+            parts=x.split("-")
+            ROLE_LOCAL.value=parts[2] if len(parts)>2 and parts[2] in ("admin","observer") else "admin"
+        return ok
+    def role(self):
+        value=getattr(ROLE_LOCAL,"value","admin")
+        return value if value in ("admin","observer") else "admin"
     def session_cookie(self,value,max_age):
         # Caddy supplies this header for public requests.  Keeping Secure for
         # HTTPS prevents accidental exposure, while loopback diagnostics still
@@ -2347,18 +2386,73 @@ class Handler(BaseHTTPRequestHandler):
         return False
     def json_request(self,maximum=65536):
         try: length=int(self.headers.get("Content-Length","0"))
-        except ValueError: raise ValueError("Invalid content length")
+        except ValueError: raise ValueError("Invalid JSON size")
         if length<2 or length>maximum: raise ValueError("Invalid JSON size")
         value=json.loads(self.rfile.read(length).decode("utf-8"))
         if not isinstance(value,dict): raise ValueError("JSON object required")
         return value
+    def web_api(self,route,method):
+        """Bearer-token REST API for external integrations (bots, billings)."""
+        try:
+            header=self.headers.get("Authorization","")
+            token=header[7:] if header.startswith("Bearer ") else ""
+            with STATE_LOCK:
+                state=load()
+                key=onyx_webapi.find_key(state.get("api_keys",[]),token)
+                if key is None:
+                    self.send_json({"ok":False,"message":"Unauthorized"},401); return
+                onyx_webapi.touch_key(state.setdefault("api_keys",[]),key); save(state)
+            if method=="GET": self.web_api_get(route)
+            else: self.web_api_post(route)
+        except ValueError as exc:
+            self.send_json({"ok":False,"message":str(exc)},400)
+        except RuntimeError as exc:
+            self.send_json({"ok":False,"message":"Операция не выполнена: "+str(exc)[-160:]},503)
+        except Exception as exc:
+            print("web api failed:",type(exc).__name__,file=sys.stderr,flush=True)
+            self.send_json({"ok":False,"message":"Internal error"},500)
+    def web_api_get(self,route):
+        if route=="ping":
+            self.send_json({"ok":True,"panel":DOMAIN,"time":int(time.time())}); return
+        if route=="clients":
+            self.send_json({"ok":True,"clients":web_api_clients()}); return
+        if route.startswith("clients/") and route.endswith("/link"):
+            user=web_api_find(route[8:-5])
+            link=proxy_link(user.get("protocol","web"),user.get("secret",""),int(user.get("backend_port",443)),user.get("name",""),user.get("username",""))
+            self.send_json({"ok":True,"link":link}); return
+        self.send_json({"ok":False,"message":"Not found"},404)
+    def web_api_post(self,route):
+        parts=route.split("/")
+        if route=="clients":
+            name,protocol,devices=onyx_webapi.check_create(self.json_request())
+            user=(ctl_manager_json("add-json",{"protocol":protocol,"name":name,"devices":devices})
+                  if protocol=="mtproto" else ctl("add",protocol,name))
+            self.send_json({"ok":True,"client":{"id":user.get("id"),"name":user.get("name"),"protocol":protocol}},201); return
+        if len(parts)==3 and parts[0]=="clients":
+            user=web_api_find(parts[1]); uid=str(user["id"])
+            if parts[2]=="renew":
+                days=onyx_webapi.check_renew(self.json_request())
+                with STATE_LOCK:
+                    d=load(); d.setdefault("expires",{})[uid]=int(time.time())+days*86400; save(d)
+                self.send_json({"ok":True,"expires":d["expires"][uid]}); return
+            if parts[2]=="toggle":
+                enable=bool(self.json_request().get("enabled",True))
+                ctl("set-user",uid,"1" if enable else "0")
+                self.send_json({"ok":True,"enabled":enable}); return
+            if parts[2]=="delete":
+                ctl("delete",uid)
+                with STATE_LOCK:
+                    d=load()
+                    if uid in d.get("expires",{}): d["expires"].pop(uid,None); save(d)
+                self.send_json({"ok":True}); return
+        self.send_json({"ok":False,"message":"Not found"},404)
     def do_GET(self):
         path=urlparse(self.path).path
         if path.startswith(node_api.API_PREFIX+"/"):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.5.4","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.6.0","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2440,12 +2534,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_html("Flag not found",404)
             return
 
+        if path.startswith(PANEL_PATH+"/api/v1/"):
+            self.web_api(path[len(PANEL_PATH)+8:],"GET"); return
+
         if path==PANEL_PATH+"/login":
-            self.send_html(login_ui(PANEL_PATH)); return
+            self.send_html(login_ui(PANEL_PATH,totp=bool(load().get("totp",{}).get("enabled")))); return
         if path==PANEL_PATH+"/logout":
             self.send_response(303); self.send_header("Set-Cookie",self.session_cookie("",0)); self.send_header("Location",PANEL_PATH+"/login"); self.end_headers(); return
         if not self.auth():
             self.redirect("/login"); return
+        if self.role()=="observer":
+            _suffix=path[len(PANEL_PATH):] if path.startswith(PANEL_PATH) else path
+            if not onyx_access.observer_can_get(_suffix or "/"):
+                self.redirect(PANEL_PATH+"/dashboard"); return
 
         if path==PANEL_PATH+"/export":
             try: blob=build_backup_tar()
@@ -2503,7 +2604,8 @@ class Handler(BaseHTTPRequestHandler):
             _,_,cascade_carriers=cascade_api.route_assignment(cascade_records,panel_users)
             items=[dict(item,transport=cascade_api.transport_label(item),
                         carries=cascade_carriers.get(item["id"],False)) for item in cascade_records]
-            body=cascade_ui(items,panel_users,PANEL_PATH,self.csrf(),DOMAIN)
+            _d=load(); _fo=_d.get("failover",{}) if isinstance(_d.get("failover"),dict) else {}
+            body=cascade_ui(items,panel_users,PANEL_PATH,self.csrf(),DOMAIN,failover=bool(_fo.get("enabled")))
             self.send_html(layout("Каскад",body,"cascade",self.csrf())); return
         if path==PANEL_PATH+"/cascade-state":
             cascade_records=cascade_api.load_cascades(CASCADES_FILE)
@@ -2592,6 +2694,32 @@ class Handler(BaseHTTPRequestHandler):
             d=load()
             admin_login=esc(d.get("admin",{}).get("user","admin"))
             panel_url=("https://"+DOMAIN if DOMAIN else "")+PANEL_PATH
+            tg_cfg=telegram_api.normalize_config(d.get("telegram",{}))
+            backups_cfg=d.get("backups") if isinstance(d.get("backups"),dict) else {}
+            totp_cfg=d.get("totp") if isinstance(d.get("totp"),dict) else {}
+            observer=d.get("observer") if isinstance(d.get("observer"),dict) else {}
+            api_keys=onyx_webapi.public_keys(d.get("api_keys"))
+            logins=onyx_access.last_logins(d,10)
+            hour_options=''.join(f'<option value="{h}" {"selected" if int(backups_cfg.get("hour",4))==h else ""}>{h:02d}:00</option>' for h in range(24))
+            event_labels=(("expiry","Истечение доступов"),("logins","Входы в панель"),("cascades","Каскады"),("backups","Автобэкапы"))
+            event_checks=''.join(f'<label class="check"><input type="checkbox" name="event_{key}" value="1" {"checked" if tg_cfg.get("events",{}).get(key,True) else ""}>{label}</label>' for key,label in event_labels)
+            last_backup=backups_cfg.get("last") if isinstance(backups_cfg.get("last"),dict) else {}
+            backup_status=("Последний: %s — %s."%(time.strftime("%d.%m.%Y %H:%M",time.localtime(last_backup.get("ts",0))),last_backup.get("message",""))) if last_backup.get("ts") else "Копий пока не было."
+            totp_status="включена" if totp_cfg.get("enabled") else "выключена"
+            api_rows=''.join(f'<div class="api-key-row"><b>{esc(k.get("name",""))}</b><span class="muted">создан {time.strftime("%d.%m.%Y",time.localtime(k.get("created",0)))}</span><span class="muted">{"использован "+time.strftime("%d.%m.%Y",time.localtime(k["last_used"])) if k.get("last_used") else "не использовался"}</span><form method="post" action="{PANEL_PATH}/api-keys-delete"><input type="hidden" name="csrf" value="{token}"><input type="hidden" name="id" value="{esc(k.get("id"))}"><button class="danger">Отозвать</button></form></div>' for k in api_keys)
+            login_rows=''.join(f'<tr><td>{time.strftime("%d.%m %H:%M",time.localtime(l.get("ts",0)))}</td><td>{esc(l.get("user",""))} <span class="muted">({esc(l.get("role","admin"))})</span></td><td>{esc(l.get("ip",""))}</td><td class="muted">{esc((l.get("device","") or "")[:60])}{" · новое устройство" if l.get("new_device") else ""}</td></tr>' for l in logins) or '<tr><td colspan="4" class="muted">Пока нет записей</td></tr>'
+            extra_cards=f'''<div class="settings-grid"><div class="card"><div class="card-title"><div><h2>Уведомления Telegram</h2><p>Истечение доступов, входы, каскады и автобэкапы — в ваш чат</p></div></div>
+<section class="panel-setting"><form id="tgForm" action="{PANEL_PATH}/telegram-save"><input type="hidden" name="csrf" value="{token}"><div class="admin-access-grid"><div><label for="tgToken">Токен бота</label><input id="tgToken" name="token" value="{esc(tg_cfg.get("token"))}" placeholder="123456:ABC-DEF…" spellcheck="false" autocomplete="off"></div><div><label for="tgChat">Chat ID</label><input id="tgChat" name="chat" value="{esc(tg_cfg.get("chat"))}" placeholder="123456789 или @channel" spellcheck="false" autocomplete="off"></div></div><div class="checks">{event_checks}</div><div class="actions"><button type="submit" class="btn primary" name="action" value="save">Сохранить</button><button type="submit" class="btn" name="action" value="test">Проверить</button></div><p class="panel-setting-status" id="tgStatus" role="status"></p></form></section>
+<section class="panel-setting"><div class="panel-setting-info"><b>Автобэкап по расписанию</b><small>Раз в сутки архив с настройками и клиентами уходит в Telegram (если настроен) и хранится локально в /var/lib/onyx-panel/backups. {esc(backup_status)}</small></div><form id="backupForm" action="{PANEL_PATH}/backups-save"><input type="hidden" name="csrf" value="{token}"><div class="admin-access-grid"><div><label for="backupMode">Режим</label><select id="backupMode" name="mode"><option value="off" {"selected" if backups_cfg.get("mode","off")=="off" else ""}>Выключен</option><option value="telegram" {"selected" if backups_cfg.get("mode")=="telegram" else ""}>Ежедневно</option></select></div><div><label for="backupHour">Время</label><select id="backupHour" name="hour">{hour_options}</select></div><div><label for="backupKeep">Хранить копий</label><input id="backupKeep" name="keep" type="number" min="3" max="30" value="{int(backups_cfg.get("keep",7))}"></div></div><div class="actions"><button type="submit" class="btn primary">Сохранить расписание</button></div><p class="panel-setting-status" id="backupStatus" role="status"></p></form></section>
+</div>
+<div class="card"><div class="card-title"><div><h2>Безопасность</h2><p>Двухфакторная аутентификация, наблюдатель, ключи API и журнал входов</p></div></div>
+<section class="panel-setting"><div class="panel-setting-info"><b>Двухфакторная аутентификация (TOTP)</b><small>Статус: {totp_status}. При входе панель запросит код из приложения-аутентификатора (Google Authenticator, 1Password и любые совместимые).</small></div><div class="actions"><button type="button" class="btn primary" id="totpSetupBtn">{"Настроить заново" if totp_cfg.get("enabled") else "Включить 2FA"}</button>{f'<button type="button" class="btn danger" id="totpDisableBtn">Выключить 2FA</button>' if totp_cfg.get("enabled") else ''}</div><p class="panel-setting-status" id="totpStatus" role="status"></p></section>
+<section class="panel-setting"><div class="panel-setting-info"><b>Наблюдатель</b><small>Второй аккаунт только для чтения: дашборд, клиенты, ноды, каскады. Изменения запрещены на уровне сервера. Очистите оба поля, чтобы удалить доступ.</small></div><form id="observerForm" action="{PANEL_PATH}/observer-save"><input type="hidden" name="csrf" value="{token}"><div class="admin-access-grid"><div><label for="observerUser">Логин наблюдателя</label><input id="observerUser" name="user" value="{esc(observer.get("user",""))}" autocomplete="off" placeholder="Например, assistant"></div><div><label for="observerPass">Пароль</label><input id="observerPass" type="password" name="a" autocomplete="new-password" placeholder="{"Оставить текущий" if observer.get("hash") else "Минимум 3 символа"}"></div></div><div class="actions"><button type="submit" class="btn primary">Сохранить наблюдателя</button></div><p class="panel-setting-status" id="observerStatus" role="status"></p></form></section>
+<section class="panel-setting"><div class="panel-setting-info"><b>Ключи внешнего API</b><small>REST API для ботов и биллингов: Bearer-токен в заголовке Authorization, адрес <code>{panel_url}/api/v1/clients</code>.</small></div><div>{api_rows or '<p class="muted" style="font-size:12px;margin:6px 0">Ключей пока нет.</p>'}</div><form id="apiKeyForm" action="{PANEL_PATH}/api-keys-create"><input type="hidden" name="csrf" value="{token}"><div class="admin-access-grid"><div><label for="apiKeyName">Название нового ключа</label><input id="apiKeyName" name="name" maxlength="60" placeholder="Например, Бот продаж" autocomplete="off"></div></div><div class="actions"><button type="submit" class="btn primary">Создать ключ</button></div><p class="panel-setting-status" id="apiKeyStatus" role="status"></p></form></section>
+<section class="panel-setting"><div class="panel-setting-info"><b>Журнал входов</b><small>Последние входы в панель. «Новое устройство» — первый вход с такого браузера.</small></div><table class="login-log"><tr><th>Время</th><th>Кто</th><th>IP</th><th>Устройство</th></tr>{login_rows}</table></section>
+</div></div>
+<dialog id="totpDialog" class="create-dialog"><div class="dialog-head"><div><h2>Включение 2FA</h2><small>Отсканируйте QR в приложении-аутентификаторе</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><div style="padding:0 4px"><img id="totpQr" alt="QR-код TOTP" style="width:180px;height:180px;display:block;margin:0 auto" hidden><p class="muted" style="font-size:11px;word-break:break-all">Секрет: <code id="totpSecret"></code></p><label for="totpCode">Введите код из приложения</label><input id="totpCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><div class="actions create-actions"><button type="button" data-close-dialog>Отмена</button><button class="primary" id="totpConfirm">Включить</button></div></div></dialog>
+<dialog id="apiKeyDialog" class="create-dialog"><div class="dialog-head"><div><h2>Ключ создан</h2><small>Токен показывается только один раз — сохраните его</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><div style="padding:0 4px"><textarea class="code-editor" id="apiKeyToken" readonly style="min-height:74px"></textarea><div class="actions create-actions"><button type="button" class="btn" id="apiKeyCopy">Скопировать</button><button type="button" class="btn primary" data-close-dialog>Готово</button></div></div></dialog>'''
             panel_js='''<script>
 (()=>{async function submit(form,status,done){
   const btn=form.querySelector("button[type=submit]");const label=btn.textContent;btn.disabled=true;
@@ -2687,6 +2815,46 @@ if(compGrid){
 }
 })();
 </script>'''
+            security_js='''<script>
+(()=>{const PATH=@@PATH@@,CSRF=@@CSRF@@;
+const post=async(url,data)=>{const r=await fetch(url,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams(data)});
+let res;try{res=await r.json()}catch(e){throw new Error("Панель вернула некорректный ответ.")}
+if(!r.ok||!res.ok)throw new Error(res.message||"Операция не выполнена.");return res};
+["tgForm","backupForm","observerForm"].forEach(id=>{const f=document.getElementById(id);if(!f)return;const s=document.getElementById(id.replace("Form","Status"));
+f.addEventListener("submit",async e=>{e.preventDefault();s.className="panel-setting-status";s.textContent="Применяю…";
+const fd=new FormData(f),payload={};fd.forEach((v,k)=>payload[k]=v);
+try{const res=await post(f.getAttribute("action"),payload);s.className="panel-setting-status ok";s.textContent=res.message||"Готово.";if(window.onyxToast)onyxToast(res.message||"Сохранено.")}
+catch(err){s.className="panel-setting-status err";s.textContent=err.message;if(window.onyxToast)onyxToast(err.message,"err")}})});
+const totpSetupBtn=document.getElementById("totpSetupBtn"),totpDialog=document.getElementById("totpDialog");
+if(totpSetupBtn){const s=document.getElementById("totpStatus"),codeInput=document.getElementById("totpCode");
+totpSetupBtn.addEventListener("click",async()=>{s.className="panel-setting-status";s.textContent="Готовлю секрет…";
+try{const res=await post(PATH+"/totp-setup",{csrf:CSRF});
+document.getElementById("totpSecret").textContent=res.secret||"";
+const img=document.getElementById("totpQr");if(res.qr){img.src=res.qr;img.hidden=false}else img.hidden=true;
+s.textContent="";codeInput.value="";totpDialog.showModal()}catch(err){s.className="panel-setting-status err";s.textContent=err.message}});}
+const totpConfirm=document.getElementById("totpConfirm");
+if(totpConfirm)totpConfirm.addEventListener("click",async()=>{
+const s=document.getElementById("totpStatus");s.className="panel-setting-status";s.textContent="Проверяю код…";
+try{const res=await post(PATH+"/totp-enable",{csrf:CSRF,code:document.getElementById("totpCode").value.trim()});
+s.className="panel-setting-status ok";s.textContent=res.message;document.getElementById("totpDialog").close();setTimeout(()=>location.reload(),900)}
+catch(err){s.className="panel-setting-status err";s.textContent=err.message}});
+const totpDisableBtn=document.getElementById("totpDisableBtn");
+if(totpDisableBtn)totpDisableBtn.addEventListener("click",async()=>{
+const s=document.getElementById("totpStatus");const code=prompt("Введите текущий код из приложения, чтобы выключить 2FA:");if(code===null)return;
+s.className="panel-setting-status";s.textContent="Выключаю…";
+try{const res=await post(PATH+"/totp-disable",{csrf:CSRF,code:code.trim()});s.className="panel-setting-status ok";s.textContent=res.message;setTimeout(()=>location.reload(),900)}
+catch(err){s.className="panel-setting-status err";s.textContent=err.message}});
+const apiKeyForm=document.getElementById("apiKeyForm"),apiKeyDialog=document.getElementById("apiKeyDialog");
+if(apiKeyForm){const s=document.getElementById("apiKeyStatus");
+apiKeyForm.addEventListener("submit",async e=>{e.preventDefault();s.className="panel-setting-status";s.textContent="Создаю…";
+const fd=new FormData(apiKeyForm),payload={};fd.forEach((v,k)=>payload[k]=v);
+try{const res=await post(apiKeyForm.getAttribute("action"),payload);s.textContent="";
+document.getElementById("apiKeyToken").value=res.token||"";apiKeyDialog.showModal();apiKeyForm.reset()}
+catch(err){s.className="panel-setting-status err";s.textContent=err.message}});}
+const copyBtn=document.getElementById("apiKeyCopy");
+if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById("apiKeyToken");t.select();try{navigator.clipboard.writeText(t.value)}catch(e){document.execCommand("copy")}});
+})();
+</script>'''
             body=f'''<div class="page-head"><div><span class="eyebrow">ONYX PANEL / STUDIO</span><h1>Настройки</h1><p>Оформление сайта и доступ к панели</p></div></div>
 <div class="settings-grid"><div class="card settings-card"><div class="card-title"><div><h2>Панель</h2><p>Адрес входа и учётные данные администратора</p></div></div>
 <section class="panel-setting"><div class="panel-setting-info"><b>Адрес панели</b><small>Секретный путь входа — любой, от 4 символов: /xray, /my-vpn, /ab12. Меняйте его, если ссылка стала известна посторонним. После смены панель перезапустится — входите заново по новому адресу.</small></div><form id="panelPathForm" action="{PANEL_PATH}/panel-path"><p class="panel-current"><span>Текущий адрес</span><code>{panel_url}</code></p><input type=hidden name=csrf value="{token}"><label for="panelPathInput">Новый путь</label><input id="panelPathInput" name="path" value="{esc(PANEL_PATH)}" spellcheck="false" autocomplete="off" required><div class="actions"><button type="submit" class="btn primary">Сменить адрес</button></div><p class="panel-setting-status" id="panelPathStatus" role="status"></p></form></section>
@@ -2703,8 +2871,9 @@ if(compGrid){
 <p class="muted" style="font-size:11px;margin:10px 0 0">Перед заменой бинарника создаётся его копия; если новая версия не запустится, предыдущая вернётся автоматически. MTProto собирается из исходников, закреплённых за версией панели.</p></div>
 <div class="card"><div class="card-title"><div><h2>Резервная копия</h2><p>Настройки, пользователи, заглушки и конфигурации — одним архивом</p></div></div>
 <form id="importForm" action="{PANEL_PATH}/import"><input type=hidden name=csrf value="{token}"><input type=hidden name="backup" id="importData"><input type="file" id="importFile" accept=".tar.gz,.tgz,application/gzip" hidden><div class="actions" style="margin:4px 0 0"><a class="btn primary" href="{PANEL_PATH}/export" download>Экспорт</a><button type="button" class="btn" id="importPick">Импорт</button><button type="submit" hidden></button></div><p class="panel-setting-status" id="importStatus" role="status"></p></form></div></div></div>
+{extra_cards}
 {editor}
-{panel_js}'''
+{panel_js}{security_js}'''
             self.send_html(layout("Настройки",body,"settings",self.csrf())); return
 
         self.redirect("/")
@@ -2748,6 +2917,9 @@ if(compGrid){
                 self.send_json({"ok":False,"message":"Node operation failed"},503)
             return
 
+        if path.startswith(PANEL_PATH+"/api/v1/"):
+            self.web_api(path[len(PANEL_PATH)+8:],"POST"); return
+
         # Login does not require an authenticated session.
         if path==PANEL_PATH+"/login":
             client=client_id(self)
@@ -2765,12 +2937,35 @@ if(compGrid){
             d=load()
             username=form.get("user","")
             password=form.get("password","")
-            if username==d.get("admin",{}).get("user","admin") and check_password(password,d.get("admin",{}).get("hash","")):
+            admin_ok=username==d.get("admin",{}).get("user","admin") and check_password(password,d.get("admin",{}).get("hash",""))
+            observer=d.get("observer",{}) if isinstance(d.get("observer"),dict) else {}
+            observer_ok=bool(observer.get("user")) and bool(observer.get("hash")) and username==observer.get("user") and check_password(password,observer.get("hash",""))
+            if admin_ok or observer_ok:
+                role="admin" if admin_ok else "observer"
+                totp=d.get("totp",{}) if isinstance(d.get("totp"),dict) else {}
+                if totp.get("enabled") and totp.get("secret") and not onyx_totp.verify(totp["secret"],form.get("code","")):
+                    login_failed(client)
+                    self.send_html("""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#060910;color:#fff;font:15px system-ui}.b{width:min(420px,90vw);padding:28px;border:1px solid #223148;border-radius:22px;background:#0d1520}a{color:#8edcff}</style>
+<div class=b><h2>Неверный код 2FA</h2><p>Код двухфакторной аутентификации не подошёл. Попробуйте войти ещё раз.</p><a href="%s/login">Вернуться</a></div>""" % esc(PANEL_PATH),401)
+                    return
                 # A cookie-safe token: the old ':' separator was accepted by
                 # most browsers but is rejected/rewritten by some proxies.
-                token=str(int(time.time()))+"-"+secrets.token_hex(16)
+                # The trailing part carries the session role.
+                token=str(int(time.time()))+"-"+secrets.token_hex(16)+"-"+role
                 sid=sign(token)
                 login_succeeded(client)
+                try:
+                    with STATE_LOCK:
+                        state=load()
+                        fresh=onyx_access.record_login(state,username,role,client_id(self),self.headers.get("User-Agent",""))
+                        tg_cfg=telegram_api.normalize_config(state.get("telegram",{}))
+                        save(state)
+                    if fresh and onyx_telegram.configured(tg_cfg) and tg_cfg.get("events",{}).get("logins",True):
+                        threading.Thread(target=telegram_api.notify,args=(tg_cfg,"logins",
+                            "🔐 Вход в панель с нового устройства\nЛогин: %s (%s)\nIP: %s"%(username,role,client_id(self))),daemon=True).start()
+                except Exception:
+                    pass
                 self.send_response(303)
                 self.send_header("Set-Cookie",self.session_cookie(sid,86400))
                 self.send_header("Location",PANEL_PATH+"/dashboard")
@@ -2785,6 +2980,11 @@ if(compGrid){
         # Everything below requires an authenticated session.
         if not self.auth():
             self.redirect("/login")
+            return
+        if self.role()=="observer" and path!=PANEL_PATH+"/logout":
+            message="Режим наблюдателя: доступ только для чтения."
+            if self.headers.get("X-Onyx-Async","")=="1": self.send_json({"ok":False,"message":message},403)
+            else: self.send_html(message,403)
             return
 
         try: form=self.form()
@@ -3185,6 +3385,136 @@ if(compGrid){
             except (OSError,subprocess.TimeoutExpired) as exc:
                 print("routing torrent failed:",type(exc).__name__,file=sys.stderr,flush=True)
                 self.send_json({"ok":False,"message":"Операция не выполнена. Проверьте службы панели."},503); return
+        if path==PANEL_PATH+"/cascade-speed":
+            uid=form.get("id","")
+            if not re.fullmatch(r"[a-f0-9]{16}",uid or ""):
+                self.send_json({"ok":False,"message":"Некорректный идентификатор каскада."},400); return
+            def speed_job(uid=uid):
+                def worker():
+                    with APPLY_LOCK:
+                        record=next((c for c in cascade_api.load_cascades(CASCADES_FILE) if c.get("id")==uid),None)
+                        if record is None: return
+                        try: result=cascade_api.speedtest(record)
+                        except Exception as exc:
+                            result={"ok":False,"mbps":0.0,"seconds":0.0,
+                                    "message":cascade_detail(exc)[:160],"checked_at":int(time.time())}
+                        cascade_touch(uid,speed=result,pending=False)
+                return worker
+            threading.Thread(target=speed_job(),daemon=True).start()
+            self.send_json({"ok":True,"message":"Замер запущен — результат появится в карточке через полминуты."}); return
+        if path==PANEL_PATH+"/failover-toggle":
+            enabled=form.get("enabled")=="1"
+            with STATE_LOCK:
+                d=load()
+                fo=d.get("failover") if isinstance(d.get("failover"),dict) else {}
+                fo["enabled"]=enabled; d["failover"]=fo; save(d)
+            self.send_json({"ok":True,"message":"Автопереключение включено." if enabled else "Автопереключение выключено."}); return
+        if path==PANEL_PATH+"/telegram-save":
+            try:
+                cfg=telegram_api.normalize_config({"token":form.get("token","").strip(),"chat":form.get("chat","").strip(),
+                     "events":{k:form.get("event_"+k)=="1" for k in telegram_api.EVENT_KEYS}})
+                action=form.get("action","save")
+                if cfg["token"]:
+                    if action=="test":
+                        if not cfg["chat"]: raise ValueError("Укажите Chat ID — некуда отправлять проверку.")
+                        telegram_api.send_message(cfg["token"],cfg["chat"],"✅ Onyx Panel: тест уведомлений. Канал работает.")
+                        message="Тестовое сообщение отправлено в Telegram."
+                    else:
+                        telegram_api.get_me(cfg["token"])
+                        message="Настройки уведомлений сохранены."
+                else:
+                    message="Уведомления выключены: токен не задан."
+                with STATE_LOCK:
+                    d=load(); d["telegram"]=cfg; save(d)
+                self.send_json({"ok":True,"message":message}); return
+            except ValueError as exc:
+                self.send_json({"ok":False,"message":str(exc)},400); return
+            except RuntimeError as exc:
+                self.send_json({"ok":False,"message":"Telegram: "+str(exc)[:150]},400); return
+            except (OSError,subprocess.TimeoutExpired) as exc:
+                print("telegram save failed:",type(exc).__name__,file=sys.stderr,flush=True)
+                self.send_json({"ok":False,"message":"Не удалось связаться с Telegram. Проверьте токен и сеть."},503); return
+        if path==PANEL_PATH+"/totp-setup":
+            import base64
+            with STATE_LOCK:
+                d=load()
+                secret=onyx_totp.generate_secret()
+                d["totp"]={"secret":secret,"enabled":False}; save(d)
+                account=d.get("admin",{}).get("user","admin")
+            uri=onyx_totp.provisioning_uri(secret,account)
+            try:
+                png=qr_png_bytes(uri); qr="data:image/png;base64,"+base64.b64encode(png).decode("ascii")
+            except Exception:
+                qr=""
+            self.send_json({"ok":True,"secret":secret,"uri":uri,"qr":qr}); return
+        if path==PANEL_PATH+"/totp-enable":
+            code=form.get("code","").strip()
+            with STATE_LOCK:
+                d=load(); t=d.get("totp",{}) if isinstance(d.get("totp"),dict) else {}
+                if not t.get("secret"):
+                    self.send_json({"ok":False,"message":"Сначала создайте секрет двухфакторной аутентификации."},400); return
+                if not onyx_totp.verify(t["secret"],code):
+                    self.send_json({"ok":False,"message":"Код не подошёл. Проверьте время на устройстве и попробуйте снова."},400); return
+                d["totp"]={"secret":t["secret"],"enabled":True}; save(d)
+            self.send_json({"ok":True,"message":"Двухфакторная аутентификация включена."}); return
+        if path==PANEL_PATH+"/totp-disable":
+            code=form.get("code","").strip()
+            with STATE_LOCK:
+                d=load(); t=d.get("totp",{}) if isinstance(d.get("totp"),dict) else {}
+                if not t.get("enabled"):
+                    self.send_json({"ok":False,"message":"Двухфакторная аутентификация не включена."},400); return
+                if not onyx_totp.verify(t["secret"],code):
+                    self.send_json({"ok":False,"message":"Код не подошёл."},400); return
+                d["totp"]={}; save(d)
+            self.send_json({"ok":True,"message":"Двухфакторная аутентификация выключена."}); return
+        if path==PANEL_PATH+"/api-keys-create":
+            name=form.get("name","").strip() or "Ключ"
+            if len(name)>60:
+                self.send_json({"ok":False,"message":"Название ключа: до 60 символов."},400); return
+            with STATE_LOCK:
+                d=load(); keys=d.get("api_keys",[]) if isinstance(d.get("api_keys"),list) else []
+                if len(keys)>=onyx_webapi.MAX_KEYS:
+                    self.send_json({"ok":False,"message":"Достигнут лимит ключей (%d). Отзовите ненужные."%onyx_webapi.MAX_KEYS},400); return
+                key,token=onyx_webapi.new_key(name)
+                keys.append(key); d["api_keys"]=keys; save(d)
+            self.send_json({"ok":True,"token":token,"message":"Ключ создан. Токен показывается один раз — скопируйте его."}); return
+        if path==PANEL_PATH+"/api-keys-delete":
+            kid=form.get("id","")
+            with STATE_LOCK:
+                d=load()
+                d["api_keys"]=[k for k in (d.get("api_keys",[]) if isinstance(d.get("api_keys"),list) else []) if k.get("id")!=kid]
+                save(d)
+            self.send_json({"ok":True,"message":"Ключ отозван."}); return
+        if path==PANEL_PATH+"/backups-save":
+            try:
+                mode=form.get("mode","off"); hour=int(form.get("hour","4")); keep=int(form.get("keep","7"))
+            except ValueError:
+                self.send_json({"ok":False,"message":"Некорректные параметры расписания."},400); return
+            if mode not in ("off","telegram") or not 0<=hour<=23 or not 3<=keep<=30:
+                self.send_json({"ok":False,"message":"Некорректные параметры расписания."},400); return
+            with STATE_LOCK:
+                d=load(); b=d.get("backups") if isinstance(d.get("backups"),dict) else {}
+                b.update({"mode":mode,"hour":hour,"keep":keep}); d["backups"]=b; save(d)
+            self.send_json({"ok":True,"message":"Расписание автобэкапа сохранено." if mode!="off" else "Автобэкап выключен."}); return
+        if path==PANEL_PATH+"/observer-save":
+            user=form.get("user","").strip(); password=form.get("a","")
+            if len(user)>64:
+                self.send_json({"ok":False,"message":"Логин наблюдателя: до 64 символов."},400); return
+            with STATE_LOCK:
+                d=load()
+                if not user and not password:
+                    d.pop("observer",None); save(d)
+                    self.send_json({"ok":True,"message":"Доступ наблюдателя удалён."}); return
+                obs=d.get("observer") if isinstance(d.get("observer"),dict) else {}
+                if not user:
+                    self.send_json({"ok":False,"message":"Укажите логин наблюдателя."},400); return
+                if password and len(password)<3:
+                    self.send_json({"ok":False,"message":"Пароль наблюдателя: минимум 3 символа."},400); return
+                if password: obs["hash"]=hash_password(password)
+                if "hash" not in obs:
+                    self.send_json({"ok":False,"message":"Задайте пароль наблюдателя."},400); return
+                obs["user"]=user; d["observer"]=obs; save(d)
+            self.send_json({"ok":True,"message":"Наблюдатель сохранён: только чтение, без изменений настроек."}); return
         if path in (PANEL_PATH+"/cascade-add",PANEL_PATH+"/cascade-toggle",PANEL_PATH+"/cascade-delete",PANEL_PATH+"/cascade-users",PANEL_PATH+"/cascade-ping"):
             async_action=self.headers.get("X-Onyx-Async","")=="1"
             def cascade_fail(message,status=400):
@@ -3612,6 +3942,127 @@ def expiry_sweep():
         except Exception as exc:
             print("expiry sweep failed:",type(exc).__name__,file=sys.stderr,flush=True)
 
+def telegram_notify(event,text):
+    """Fire-and-forget Telegram delivery; never raises into the caller."""
+    try:
+        with STATE_LOCK: cfg=telegram_api.normalize_config(load().get("telegram",{}))
+        if telegram_api.configured(cfg): telegram_api.notify(cfg,event,text)
+    except Exception as exc:
+        print("telegram notify failed:",type(exc).__name__,file=sys.stderr,flush=True)
+
+def expiry_notifications():
+    # One reminder per client per day while its access is within 3 days.
+    with STATE_LOCK: d=load()
+    cfg=telegram_api.normalize_config(d.get("telegram",{}))
+    if not telegram_api.configured(cfg) or not cfg.get("events",{}).get("expiry",True): return
+    expires=d.get("expires",{}) if isinstance(d.get("expires"),dict) else {}
+    if not expires: return
+    now=int(time.time()); today=time.strftime("%Y-%m-%d")
+    marks=d.get("notify_marks",{}) if isinstance(d.get("notify_marks"),dict) else {}
+    subs={s.get("id"):s for s in subscription_registry()}
+    profiles={u.get("id"):u for u in users()}
+    lines=[]; touched=False
+    for uid,ts in expires.items():
+        try: ts=int(ts)
+        except (TypeError,ValueError): continue
+        if not now<=ts<=now+3*86400: continue
+        mark=marks.get(uid)
+        if isinstance(mark,dict) and mark.get("day")==today: continue
+        name=(subs.get(uid) or profiles.get(uid) or {}).get("name",uid)
+        days=max(1,(ts-now)//86400)
+        lines.append("• %s — доступ истекает через %d дн. (%s)"%(name,days,time.strftime("%d.%m.%Y %H:%M",time.localtime(ts))))
+        marks[uid]={"day":today}; touched=True
+    if not lines: return
+    telegram_notify("expiry","⏳ Истекающие доступы:\n"+"\n".join(lines))
+    if touched:
+        for uid in list(marks):
+            if uid not in expires: marks.pop(uid,None)
+        with STATE_LOCK:
+            d=load(); d["notify_marks"]=marks; save(d)
+
+def notifications_worker():
+    while True:
+        time.sleep(300)
+        try: expiry_notifications()
+        except Exception as exc:
+            print("notifications worker failed:",type(exc).__name__,file=sys.stderr,flush=True)
+
+def run_scheduled_backup():
+    blob=build_backup_tar()
+    with STATE_LOCK: cfg=telegram_api.normalize_config(load().get("telegram",{}))
+    keep=max(3,int((load().get("backups",{}) or {}).get("keep",7)))
+    directory="/var/lib/onyx-panel/backups"
+    os.makedirs(directory,exist_ok=True)
+    name="onyx-backup-%s.tar.gz"%time.strftime("%Y%m%d-%H%M%S")
+    with open(os.path.join(directory,name),"wb") as f: f.write(blob)
+    for old in sorted(os.listdir(directory))[:-keep]:
+        if old.endswith(".tar.gz"):
+            try: os.unlink(os.path.join(directory,old))
+            except OSError: pass
+    ok,note=True,""
+    try:
+        if telegram_api.configured(cfg):
+            telegram_api.send_document(cfg["token"],cfg["chat"],name,blob)
+            note="отправлен в Telegram"
+        else:
+            note="сохранён локально (Telegram не настроен)"
+    except Exception as exc:
+        ok=False; note="ошибка отправки: "+str(exc)[-120:]
+    with STATE_LOCK:
+        d=load(); b=d.get("backups") if isinstance(d.get("backups"),dict) else {}
+        b["last"]={"day":time.strftime("%Y-%m-%d"),"ts":int(time.time()),"ok":ok,
+                   "message":note,"size":len(blob)}
+        d["backups"]=b; save(d)
+    telegram_notify("backups",("✅ Автобэкап %s (%s)."%(note,human_bytes(len(blob)))) if ok else ("⚠️ Автобэкап: %s"%note))
+
+def backup_worker():
+    # Hourly tick: the copy happens once per day at the configured hour.
+    while True:
+        time.sleep(3600)
+        try:
+            with STATE_LOCK: d=load()
+            cfg=d.get("backups",{}) if isinstance(d.get("backups"),dict) else {}
+            if cfg.get("mode")!="telegram": continue
+            if time.localtime().tm_hour!=int(cfg.get("hour",4)): continue
+            last=cfg.get("last",{}) if isinstance(cfg.get("last"),dict) else {}
+            if last.get("day")==time.strftime("%Y-%m-%d"): continue
+            run_scheduled_backup()
+        except Exception as exc:
+            print("backup worker failed:",type(exc).__name__,file=sys.stderr,flush=True)
+
+FAILOVER_FAILURES={}
+def failover_worker():
+    # Watches the active catch-all cascade; swaps to a standby after two
+    # consecutive failed checks and reports the switch to Telegram.
+    while True:
+        time.sleep(90)
+        try:
+            with STATE_LOCK: d=load()
+            if not (d.get("failover",{}) or {}).get("enabled"): continue
+            cascades=cascade_api.load_cascades(CASCADES_FILE)
+            active=onyx_failover.active_cascade(cascades)
+            if active is None: continue
+            result=cascade_api.ping(active)
+            onyx_failover.note_result(FAILOVER_FAILURES,active["id"],bool(result.get("ok")))
+            cascade_touch(active["id"],check=result,pending=False)
+            if result.get("ok"): continue
+            action=onyx_failover.decide(cascades,FAILOVER_FAILURES)
+            if not action: continue
+            target=next((c for c in cascades if c.get("id")==action["enable"]),None)
+            for c in cascades:
+                if c.get("id")==action["disable"]: c["enabled"]=False
+                if c.get("id")==action["enable"]: c["enabled"]=True
+            cascade_api.save_cascades(CASCADES_FILE,cascades)
+            FAILOVER_FAILURES.clear()
+            try: ctl("cascade-apply")
+            except Exception as exc:
+                print("failover apply failed:",cascade_detail(exc),file=sys.stderr,flush=True)
+            telegram_notify("cascades","🔁 Каскад «%s» не отвечает (%s). Клиенты переключены на «%s»."
+                            %(active.get("name",""),(result.get("message") or "")[:120],
+                              (target or {}).get("name","?")))
+        except Exception as exc:
+            print("failover worker failed:",type(exc).__name__,file=sys.stderr,flush=True)
+
 def heal_caddy_route():
     # If a path change was interrupted before caddy restarted, the Caddyfile
     # already names the new path while the running caddy still routes the old
@@ -3645,6 +4096,9 @@ def heal_caddy_route():
 def main():
     heal_caddy_route()
     threading.Thread(target=expiry_sweep,daemon=True).start()
+    threading.Thread(target=notifications_worker,daemon=True).start()
+    threading.Thread(target=backup_worker,daemon=True).start()
+    threading.Thread(target=failover_worker,daemon=True).start()
     ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()
 
 if __name__=="__main__":
@@ -3681,7 +4135,7 @@ PY
 fi
 
 python3 -m py_compile "$APP_FILE"
-python3 -m py_compile "$APP_DIR/onyx_subscriptions.py" "$APP_DIR/onyx_panel_extras.py" "$APP_DIR/onyx_ui.py" "$APP_DIR/onyx_metrics.py" "$APP_DIR/onyx_update.py" "$APP_DIR/onyx_nodes.py" "$APP_DIR/onyx_openflux.py" "$APP_DIR/onyx_awg.py" "$APP_DIR/onyx_firewall.py" "$APP_DIR/onyx_components.py" "$APP_DIR/onyx_cascade.py" "$APP_DIR/onyx_routing.py"
+python3 -m py_compile "$APP_DIR/onyx_subscriptions.py" "$APP_DIR/onyx_panel_extras.py" "$APP_DIR/onyx_ui.py" "$APP_DIR/onyx_metrics.py" "$APP_DIR/onyx_update.py" "$APP_DIR/onyx_nodes.py" "$APP_DIR/onyx_openflux.py" "$APP_DIR/onyx_awg.py" "$APP_DIR/onyx_firewall.py" "$APP_DIR/onyx_components.py" "$APP_DIR/onyx_cascade.py" "$APP_DIR/onyx_routing.py" "$APP_DIR/onyx_telegram.py" "$APP_DIR/onyx_totp.py" "$APP_DIR/onyx_access.py" "$APP_DIR/onyx_webapi.py" "$APP_DIR/onyx_failover.py"
 
 
 # ---- Finish installation: service, Caddy route, permissions, start ----
@@ -3721,7 +4175,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.5.4
+Description=Onyx Panel 1.6.0
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4277,9 +4731,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.5.4 UPDATED"
+echo "          Onyx Panel 1.6.0 UPDATED"
 else
-echo "         Onyx Panel 1.5.4 IS READY"
+echo "         Onyx Panel 1.6.0 IS READY"
 fi
 echo "============================================================"
 echo
