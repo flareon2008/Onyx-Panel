@@ -1250,6 +1250,8 @@ if(save)save.addEventListener('click',async()=>{
   if(save.disabled)return;
   save.disabled=true;const old=save.innerHTML;save.textContent='Сохраняю…';
   try{const payload={};LISTS.forEach(l=>payload[l]=state[l].join(','));
+    const tsw=document.querySelector('[data-routing-torrent]');
+    if(tsw)payload.block_torrents=tsw.getAttribute('aria-checked')==='true'?'1':'0';
     const r=await fetch(PATH+'/routing-save',{method:'POST',headers:{'X-Onyx-Async':'1'},
       body:new URLSearchParams({csrf:CSRF,...payload})});
     if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');

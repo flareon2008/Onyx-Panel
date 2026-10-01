@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.5.1..."
+    echo "Updating Onyx Panel 1.5.2..."
 else
-    echo "Configuring Onyx Panel 1.5.1..."
+    echo "Configuring Onyx Panel 1.5.2..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2358,7 +2358,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.5.1","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.5.2","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -3146,10 +3146,13 @@ if(compGrid){
 
         if path==PANEL_PATH+"/routing-save":
             try:
+                # Older clients omit block_torrents; keep the stored toggle
+                # instead of silently resetting it on every rules save.
+                torrent=form.get("block_torrents")
                 data={"direct_ips":form.get("direct_ips","").split(","),
                       "direct_domains":form.get("direct_domains","").split(","),
                       "ipv4_domains":form.get("ipv4_domains","").split(","),
-                      "block_torrents":form.get("block_torrents")=="1"}
+                      "block_torrents":routing_api.load(ROUTING_FILE).get("block_torrents",False) if torrent is None else torrent=="1"}
                 routing_api.save(ROUTING_FILE,data)
                 try:
                     ctl("cascade-apply")
@@ -3718,7 +3721,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.5.1
+Description=Onyx Panel 1.5.2
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4274,9 +4277,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.5.1 UPDATED"
+echo "          Onyx Panel 1.5.2 UPDATED"
 else
-echo "         Onyx Panel 1.5.1 IS READY"
+echo "         Onyx Panel 1.5.2 IS READY"
 fi
 echo "============================================================"
 echo
