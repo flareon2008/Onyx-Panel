@@ -50,6 +50,7 @@ def icon(name):
              'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/>',
              'refresh': '<path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6"/>',
              'modules': '<rect x="3" y="4" width="18" height="4.6" rx="1.5"/><rect x="3" y="10.7" width="18" height="4.6" rx="1.5"/><rect x="3" y="17.4" width="18" height="4.6" rx="1.5"/><path d="M6.6 6.3h.01M6.6 13h.01M6.6 19.7h.01"/>',
+             'globe': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a13.8 13.8 0 0 1 3.6 9 13.8 13.8 0 0 1-3.6 9 13.8 13.8 0 0 1-3.6-9 13.8 13.8 0 0 1 3.6-9z"/>',
              'chevron-down': '<path d="m6 9 6 6 6-6"/>',
              'chart': '<path d="M3 3v18h18M6 15l4-5 4 3 6-8"/>',
              'link': '<path d="m10 13 4-4m-6 5-2 2a3 3 0 0 0 4 4l3-3m-2-10 3-3a3 3 0 0 1 4 4l-2 2"/>',
@@ -480,7 +481,7 @@ def page_layout(title, body, path, active, domain, csrf='', role='admin'):
     nav = ''
     for key, label, glyph in [('dashboard', 'Дашборд', 'grid'), ('users', 'Клиенты', 'users'), ('nodes', 'Ноды', 'nodes'),
                               ('cascade', 'Каскад', 'cascade'), ('routing', 'Маршрутизация', 'route'),
-                              ('updates', 'Обновления', 'refresh'), ('settings', 'Настройки', 'settings')]:
+                              ('updates', 'Обновления', 'globe'), ('settings', 'Настройки', 'settings')]:
         current = ' aria-current="page"' if key == active else ''
         state = ' active' if key == active else ''
         nav += f'<a class="nav-button{state}" href="{esc(path)}/{key}" data-tip="{label}" aria-label="{label}"{current}>{icon(glyph)}</a>'
