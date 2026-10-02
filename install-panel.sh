@@ -447,9 +447,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.26..."
+    echo "Updating Onyx Panel 1.8.27..."
 else
-    echo "Configuring Onyx Panel 1.8.26..."
+    echo "Configuring Onyx Panel 1.8.27..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2456,7 +2456,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.26","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.27","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2793,7 +2793,7 @@ pick.addEventListener("click",()=>file.click());
 file.addEventListener("change",async()=>{const f=file.files&&file.files[0];if(!f)return;if(f.size>9*1024*1024){status.className="panel-setting-status err";status.textContent="Файл больше 9 МБ.";file.value="";return}if(!(await onyxConfirm("Заменить текущих пользователей, настройки и заглушки содержимым копии?",{title:"Восстановление из копии",ok:"Восстановить",danger:true})))  {file.value="";return}status.className="panel-setting-status";status.textContent="Читаю файл…";const reader=new FileReader();reader.onload=()=>{data.value=String(reader.result).split(",").pop()||"";submit(importForm,status)};reader.onerror=()=>{status.className="panel-setting-status err";status.textContent="Не удалось прочитать файл.";file.value=""};reader.readAsDataURL(f)});};
 const compGrid=document.getElementById("componentGrid");
 if(compGrid){
-  const compCsrf=compGrid.dataset.csrf,checkUrl=compGrid.dataset.check,installUrl=compGrid.dataset.install,statusUrl=compGrid.dataset.status;
+  const compCsrf=compGrid.dataset.csrf,checkUrl=compGrid.dataset.check,installUrl=compGrid.dataset.install,statusUrl=compGrid.dataset.status,verifyUrl=compGrid.dataset.verify;
   const compRows={};
   compGrid.querySelectorAll("[data-component]").forEach(row=>{compRows[row.dataset.component]={row,ver:row.querySelector("[data-ver]"),sel:row.querySelector("select"),btn:row.querySelector("button"),status:row.querySelector(".component-item-status")}});
   async function compApi(url,body){const r=await fetch(url,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams(body)});let j;try{j=await r.json()}catch(e){throw new Error("Панель недоступна. Проверьте связь и попробуйте снова.")}if(!r.ok)throw new Error(j.message||"Не выполнено.");return j}
@@ -2805,6 +2805,8 @@ if(compGrid){
   function compHide(){compOverlay.classList.remove("show");setTimeout(()=>{compOverlay.hidden=true},260)}
   compClose.addEventListener("click",compHide);
   async function compRefresh(){const d=await compApi(checkUrl,{csrf:compCsrf});Object.keys(compRows).forEach(n=>{const item=compRows[n];item.ver.textContent=(d.current&&d.current[n])||"—";if(item.sel){const tags=(d.catalog&&d.catalog[n])||[];const cur=(d.current&&d.current[n])||"";const wanted="v"+cur;const list=tags.slice(0,6);if(wanted&&list.indexOf(wanted)<0&&tags.indexOf(wanted)>=0)list.push(wanted);item.sel.innerHTML="";list.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t===wanted?t+" — установлена":t;item.sel.appendChild(o)});if(wanted&&list.indexOf(wanted)>=0)item.sel.value=wanted}});return d}
+  async function compVerify(n,target,hint){if(n!=="openflux"||!target)return;hint.hidden=false;hint.className="component-hint";hint.textContent="Проверяю версию "+target.replace(/^v/,"")+"…";try{const r=await compApi(verifyUrl,{csrf:compCsrf,component:n,target});hint.className="component-hint "+(r.ok?"ok":"err");hint.textContent=r.ok?target.replace(/^v/,"")+" подходит для установки.":(r.message||"Версия не подходит для установки.")}catch(e){hint.hidden=true}}
+  Object.keys(compRows).forEach(n=>{if(n==="openflux"&&compRows[n].sel)compRows[n].sel.addEventListener("change",()=>compVerify(n,compRows[n].sel.value,compRows[n].status))});
   compRefresh().catch(()=>{Object.values(compRows).forEach(item=>{item.ver.textContent="—"})});
   Object.keys(compRows).forEach(n=>{const item=compRows[n];
     item.btn.addEventListener("click",async()=>{
@@ -2907,7 +2909,7 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
 <div class="move-overlay" id="moveOverlay" hidden><div class="move-card"><div class="move-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" id="moveRing" cx="50" cy="50" r="44"/></svg><b id="moveSecs">8</b></div><h3>Панель переезжает</h3><p id="moveText">Адрес изменён. Caddy и панель перезапускаются — сейчас откроется новый адрес входа. Войдите на нём заново.</p><code id="moveUrl"></code><a class="btn primary" id="moveLink" href="#">Перейти сейчас</a></div></div>
 </div>
 <div class="settings-col"><div class="card"><div class="card-title"><div><h2>Компоненты</h2><p>Обновление Xray, OpenFlux, AmneziaWG и MTProto с их репозиториев</p></div></div>
-<div class="component-stack" id="componentGrid" data-csrf="{token}" data-check="{PANEL_PATH}/component-check" data-install="{PANEL_PATH}/component-install" data-status="{PANEL_PATH}/component-status">
+<div class="component-stack" id="componentGrid" data-csrf="{token}" data-check="{PANEL_PATH}/component-check" data-install="{PANEL_PATH}/component-install" data-status="{PANEL_PATH}/component-status" data-verify="{PANEL_PATH}/component-verify">
 <div class="component-item" data-component="xray" data-label="Xray"><div class="component-item-head"><strong>Xray</strong><small data-ver>…</small></div><div class="update-control"><select data-sel aria-label="Версия Xray"></select><button class="primary comp-icon" title="Обновить Xray" aria-label="Обновить Xray">{icon('refresh')}</button></div><p class="component-item-status" role="status"></p></div>
 <div class="component-item" data-component="openflux" data-label="OpenFlux"><div class="component-item-head"><strong>OpenFlux</strong><small data-ver>…</small></div><div class="update-control"><select data-sel aria-label="Версия OpenFlux"></select><button class="primary comp-icon" title="Обновить OpenFlux" aria-label="Обновить OpenFlux">{icon('refresh')}</button></div><p class="component-item-status" role="status"></p></div>
 <div class="component-item" data-component="awg" data-label="AmneziaWG"><div class="component-item-head"><strong>AmneziaWG</strong><small data-ver>…</small></div><div class="update-control"><select data-sel aria-label="Версия AmneziaWG"></select><button class="primary comp-icon" title="Обновить AmneziaWG" aria-label="Обновить AmneziaWG">{icon('refresh')}</button></div><p class="component-item-status" role="status"></p></div>
@@ -3054,6 +3056,9 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
             else: web_updates.mark_notes_read()
             self.send_json({"ok":True}); return
 
+        if path==PANEL_PATH+"/component-verify":
+            self.send_json(components.verify(form.get("component",""),form.get("target","")))
+            return
         if path in (PANEL_PATH+"/component-check",PANEL_PATH+"/component-install"):
             try:
                 result=(components.start(form.get("component",""),form.get("target",""))
@@ -4231,7 +4236,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.26
+Description=Onyx Panel 1.8.27
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4787,9 +4792,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.26 UPDATED"
+echo "          Onyx Panel 1.8.27 UPDATED"
 else
-echo "         Onyx Panel 1.8.26 IS READY"
+echo "         Onyx Panel 1.8.27 IS READY"
 fi
 echo "============================================================"
 echo

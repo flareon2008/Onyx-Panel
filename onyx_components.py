@@ -148,6 +148,34 @@ def catalog(force=False):
             "phase": state.get("phase", "idle"), "message": state.get("message", "")}
 
 
+_VERIFY_CACHE = {}
+
+
+def verify(component, tag):
+    """Immediate check that a release actually ships the server binary."""
+    if component not in SPECS:
+        raise ValueError("Некорректный компонент.")
+    spec = SPECS[component]
+    if spec.get("mode") == "refresh":
+        return {"ok": True, "message": "Пересборка из исходников панели."}
+    if not re.fullmatch(r"v\d+(?:\.\d+){1,3}", str(tag)):
+        raise ValueError("Некорректная версия.")
+    key = (component, str(tag))
+    cached = _VERIFY_CACHE.get(key)
+    if cached and time.time() - cached[0] < 600:
+        return cached[1]
+    url = spec["asset"].format(tag=str(tag))
+    result = _run(["curl", "-sIL", "-o", "/dev/null", "-w", "%{http_code}",
+                   "--connect-timeout", "15", "--max-time", "30", url], timeout=40)
+    output = (result.stdout or "").strip().splitlines()
+    code = output[-1] if output else ""
+    ok = result.returncode == 0 and code == "200"
+    payload = {"ok": ok, "message": "" if ok else
+               "В релизе " + str(tag) + " нет сборки для Linux — установка невозможна. Выберите другую версию."}
+    _VERIFY_CACHE[key] = (time.time(), payload)
+    return payload
+
+
 def status():
     state = read_state(STATUS)
     state["current"] = {name: _current(name) for name in SPECS}
