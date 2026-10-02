@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 from pathlib import Path
 
@@ -29,7 +30,7 @@ SPECS = {
         "name": "Xray",
         "repo": "https://github.com/XTLS/Xray-core.git",
         "asset": "https://github.com/XTLS/Xray-core/releases/download/{tag}/Xray-linux-64.zip",
-        "binary": Path("/opt/onyx-core/xray/xray"),
+        "binary": Path("/opt/onyx-panel/xray/xray"),
         "service": "onyx-panel-xray.service",
         "mode": "asset",
     },
@@ -37,7 +38,7 @@ SPECS = {
         "name": "OpenFlux",
         "repo": "https://github.com/damnurmum/OpenFlux-Android.git",
         "asset": "https://github.com/damnurmum/OpenFlux-Android/releases/download/{tag}/openflux-linux-amd64",
-        "binary": Path("/opt/onyx-core/openflux/openflux"),
+        "binary": Path("/opt/onyx-panel/openflux/openflux"),
         "service": "onyx-panel-openflux.service",
         "mode": "asset",
     },
