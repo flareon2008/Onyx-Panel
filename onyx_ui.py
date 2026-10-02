@@ -326,6 +326,7 @@ input[type=checkbox]{accent-color:var(--accent)}
 .clients-table input[type=checkbox]:checked:after{content:none}
 .clients-table input[type=checkbox]:disabled{opacity:.4;cursor:default}
 .load-more{display:flex;justify-content:center;padding:7px 16px 19px}.load-more[hidden]{display:none}
+@media(min-width:701px){.clients-table .select-col{width:48px;padding-left:16px;padding-right:4px}}
 .load-more button{display:inline-flex;align-items:center;gap:8px;padding:10px 26px;border:1px solid var(--line);border-radius:999px;background:var(--raised);color:var(--text);font-size:12px;font-weight:550;cursor:pointer;transition:border-color .15s ease,color .15s ease,background .15s ease}
 .load-more button:hover{border-color:var(--accent);color:var(--accent);background:var(--tint)}
 .load-more button .ico{width:15px;height:15px}
