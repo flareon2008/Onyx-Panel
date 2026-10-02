@@ -334,6 +334,30 @@ input[type=checkbox]{accent-color:var(--accent)}
 .load-more button{display:inline-flex;align-items:center;gap:8px;padding:10px 26px;border:1px solid var(--line);border-radius:999px;background:var(--raised);color:var(--text);font-size:12px;font-weight:550;cursor:pointer;transition:border-color .15s ease,color .15s ease,background .15s ease}
 .load-more button:hover{border-color:var(--accent);color:var(--accent);background:var(--tint)}
 .load-more button .ico{width:15px;height:15px}
+.nodes-live-card .pill{white-space:nowrap}
+.dashboard-nodes{display:grid;gap:14px}
+.node-glance{border:1px solid var(--line);border-radius:12px;padding:15px 16px;background:var(--raised)}
+.node-glance.offline{opacity:.85}
+.node-glance-head{display:flex;align-items:center;gap:12px}
+.node-glance-head .node-flag{display:grid;place-items:center;flex:0 0 auto;width:41px;height:41px;border:1px solid var(--line);border-radius:11px;background:var(--input);overflow:hidden}
+.node-glance-name{min-width:0;flex:1}
+.node-glance-name strong{font-size:13px;overflow-wrap:anywhere}
+.node-glance-name small{display:block;margin-top:2px;color:var(--muted);font:9px var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.node-glance-head>.badge{margin-left:auto}
+.node-glance-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.node-glance-stats>div{padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--input)}
+.node-glance-stats span{display:block;font-size:9px;color:var(--muted)}
+.node-glance-stats b{display:block;margin-top:3px;font:500 12px var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.node-glance-users{display:grid;gap:2px;margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+.node-user{display:flex;align-items:center;gap:9px;padding:5px 2px;font-size:11.5px}
+.node-user i{width:7px;height:7px;border-radius:50%;background:var(--line);flex:0 0 auto}
+.node-user.on i{background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 16%,transparent)}
+.node-user span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.node-user small{margin-left:auto;color:var(--muted);font-size:9px;flex:0 0 auto;white-space:nowrap}
+.node-user.more span{color:var(--muted);font-size:10px}
+.node-users-empty{margin:2px 0 0;font-size:10.5px;color:var(--muted)}
+.node-glance-error{margin:10px 0 0;font-size:11px;color:var(--amber)}
+@media(max-width:700px){.node-glance-stats{grid-template-columns:1fr 1fr}}
 '''
 
 
@@ -836,7 +860,7 @@ def nodes_ui(nodes, local, connection_token, path, csrf):
 <div class="nodes-grid">
 <section class="card local-node-card"><div class="local-node-head"><span class="local-node-flag">{local_flag}</span><div><span class="eyebrow">ТЕКУЩАЯ НОДА</span><h2>{esc(local_city)}</h2><small>{esc(local_country)}</small></div><span class="badge on">Активна</span></div>
 <form class="node-location-form" method="post" action="{esc(path)}/node-action"><input type="hidden" name="csrf" value="{esc(csrf)}"><input type="hidden" name="operation" value="location"><input id="nodeCountryName" type="hidden" name="country_name" value="{esc(local.get('country_name','Сервер'))}"><div class="location-fields"><div class="country-flag-field"><label>Страна ноды</label><select id="nodeCountry" name="country_code" required>{country_options}</select></div><div><label>Город / название локации</label><input name="name" maxlength="80" value="{esc(local.get('name','Основная локация'))}" placeholder="Хельсинки" required></div></div><div class="location-actions"><small>Страна и город определяются по IP автоматически. Здесь их можно исправить вручную.</small><button class="primary">Сохранить</button></div></form><script>(()=>{{const select=document.getElementById('nodeCountry'),name=document.getElementById('nodeCountryName');if(select&&name)select.addEventListener('change',()=>{{name.value=select.selectedOptions[0].dataset.countryName||'Сервер'}})}})();</script>
-<div class="node-token-box"><div class="node-token-title"><span>{icon('link')}</span><div><strong>Node API token</strong><small>Адрес и защищённый ключ подключения этой ноды</small></div></div><div class="node-token-copy"><input value="{esc(connection_token)}" readonly spellcheck="false" aria-label="Node API token"><button type="button" data-copy="{esc(connection_token)}">{icon('copy')}<span>Копировать</span></button></div><p>Храните токен как пароль. Он нужен только администратору другой Onyx-панели.</p><details><summary>Доступные методы API</summary><div class="api-methods"><code>GET · /status</code><code>GET · /profiles</code><code>POST · /profiles/create</code><code>POST · /profiles/delete</code></div></details></div></section>
+<div class="node-token-box"><div class="node-token-title"><span>{icon('link')}</span><div><strong>Node API token</strong><small>Адрес и защищённый ключ подключения этой ноды</small></div></div><div class="node-token-copy"><input value="{esc(connection_token)}" readonly spellcheck="false" aria-label="Node API token"><button type="button" data-copy="{esc(connection_token)}">{icon('copy')}<span>Копировать</span></button></div><p>Храните токен как пароль. Он нужен только администратору другой Onyx-панели.</p><details><summary>Доступные методы API</summary><div class="api-methods"><code>GET · /status</code><code>GET · /profiles</code><code>GET · /metrics</code><code>POST · /profiles/create</code><code>POST · /profiles/delete</code></div></details></div></section>
 <section class="card node-connect-card"><div class="connect-mark">{icon('nodes')}</div><span class="eyebrow">НОВАЯ ЛОКАЦИЯ</span><h2>Подключить удалённую ноду</h2><p>Добавьте ещё один VPS в общую подписку. Все параметры загрузятся автоматически.</p><ol class="node-connect-steps"><li><i>1</i><span>Скопируйте Node API token на другом сервере</span></li><li><i>2</i><span>Вставьте его в поле ниже</span></li><li><i>3</i><span>Панель проверит домен, страну и доступность API</span></li></ol><form method="post" action="{esc(path)}/node-action"><input type="hidden" name="csrf" value="{esc(csrf)}"><input type="hidden" name="operation" value="add"><label>Node API token</label><div class="node-connect-input"><input name="connection_token" autocomplete="off" spellcheck="false" placeholder="onyxnode1_…" required><button class="primary">Проверить и добавить</button></div><small class="secure-hint">Соединение проверяется через HTTPS. Токен не передаётся сторонним сервисам.</small></form></section></div>
 <section class="nodes-section"><div class="nodes-section-head"><div><span class="eyebrow">NETWORK MAP</span><h2>Подключённые ноды</h2></div><span class="pill">{len(nodes)} / 16</span></div><div class="nodes-list">{''.join(cards) if cards else empty}</div></section>'''
 
@@ -1369,7 +1393,41 @@ def chart(history, hours):
     return '<svg viewBox="0 0 810 220" role="img" aria-label="Скорость трафика прокси за выбранный период">'+grid+''.join(paths)+ticks+'</svg>'
 
 
-def _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours=1):
+def nodes_glances(live, path):
+    """Dashboard card body: proxy traffic and federated users on managed nodes."""
+    nodes=(live or {}).get('nodes') or []
+    labels={'vless':'VLESS','hysteria':'Hysteria2'}
+    def fmt_rate(value):
+        return size(int(value))+'/с' if value is not None else '—'
+    total_down_rate=sum(r['rates'].get('down') or 0 for r in nodes if r.get('online'))
+    total_up_rate=sum(r['rates'].get('up') or 0 for r in nodes if r.get('online'))
+    total_traffic=sum((r.get('totals') or {}).get('up',0)+(r.get('totals') or {}).get('down',0) for r in nodes if r.get('online'))
+    total_users=sum(len(r.get('users') or []) for r in nodes)
+    active_users=sum(1 for r in nodes for u in (r.get('users') or []) if u.get('active'))
+    rows=[]
+    for node in nodes:
+        flag_img=node_flag_image(node.get('country_code','UN'),path)
+        title=esc(node.get('location') or node.get('country_name') or node.get('url',''))
+        subtitle=esc(node.get('url','')) if node.get('location') else esc(node.get('country_name',''))
+        if not node.get('online'):
+            rows.append(f'''<div class="node-glance offline"><div class="node-glance-head"><span class="node-flag">{flag_img}</span><div class="node-glance-name"><strong>{title}</strong><small>{subtitle}</small></div><span class="badge">Нет данных</span></div><p class="node-glance-error">{esc(node.get('error') or 'Нода не отвечает.')}</p></div>''')
+            continue
+        rates=node.get('rates') or {}; totals=node.get('totals') or {}
+        users=node.get('users') or []
+        active=sum(1 for u in users if u.get('active'))
+        traffic_value=size(totals.get('up',0)+totals.get('down',0))
+        shown=users[:6]
+        more=len(users)-len(shown)
+        user_rows=''.join(f'<div class="node-user{" on" if u.get("active") else ""}"><i></i><span>{esc(u["name"])} · {esc(u["device"])}</span><small>{esc(labels.get(u.get("protocol",""),u.get("protocol","")))}</small></div>' for u in shown)
+        more_row=f'<div class="node-user more"><span>+{more} подключений</span></div>' if more>0 else ''
+        empty_row='<p class="node-users-empty">Профили этой панели на ноде не активированы</p>' if not users else ''
+        rows.append(f'''<div class="node-glance"><div class="node-glance-head"><span class="node-flag">{flag_img}</span><div class="node-glance-name"><strong>{title}</strong><small>{subtitle}</small></div><span class="badge {'on' if active else ''}">{'Онлайн' if active else 'Без трафика'}</span></div><div class="node-glance-stats"><div><span>↓ Получение</span><b>{fmt_rate(rates.get('down'))}</b></div><div><span>↑ Отправка</span><b>{fmt_rate(rates.get('up'))}</b></div><div><span>Трафик ноды</span><b>{traffic_value}</b></div><div><span>Пользователи</span><b>{active} из {len(users)}</b></div></div><div class="node-glance-users">{user_rows}{more_row}{empty_row}</div></div>''')
+    empty='<p class="empty">Ноды не подключены — вся подписка обслуживается этой панелью. <a href="'+esc(path)+'/nodes">Подключить ноду →</a></p>' if not nodes else ''
+    footer=f'<p class="note">Суммарно по нодам: ↓ {fmt_rate(total_down_rate or None)} · ↑ {fmt_rate(total_up_rate or None)} · {active_users} активных подключений из {total_users}. Активность — передача данных за последние 90 секунд.</p>' if nodes else ''
+    return ('<div class="dashboard-nodes">'+(empty or ''.join(rows))+'</div>'+footer)
+
+
+def _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours=1, nodes=None):
     subs = live_subscriptions(subs, profiles)
     latest=data.get('latest',{}); age=max(0,int(time.time())-latest.get('time',0)); fresh=bool(latest) and age<=120
     fault=data.get('collector_error',{})
@@ -1405,7 +1463,7 @@ def _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, pr
     records=[r for r in records if r['id']!='primary']
     shown=sorted(records,key=lambda r:(bool(r['totals']['active']),r['totals']['up']+r['totals']['down']),reverse=True)[:8]
     component_modal=COMPONENT_MODAL_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',json.dumps(csrf))
-    return component_modal+f'''<div data-live-block="health" class="live-block">{health}</div><section class="card resource-deck live-block" data-live-block="resources"><div class="resource-grid">{''.join(resources)}</div></section><div class="overview-stats live-block" data-live-block="overview">{stats}</div><div class="dashboard-grid"><section class="card graph-card"><div class="card-title"><div><span class="eyebrow">TRAFFIC / LIVE HISTORY</span><h2>Трафик прокси</h2></div><div class="range">{controls}</div></div><div class="graph-speeds live-block" data-live-block="speeds"><div><span>↑ Отправка</span><b>{size(latest.get('up_rate')) if traffic_fresh else '—'}</b><small> / с</small></div><div><span>↓ Получение</span><b>{size(latest.get('down_rate')) if traffic_fresh else '—'}</b><small> / с</small></div></div><div class="chart-wrap live-block" data-live-block="chart">{graph}</div><div class="legend"><span><i></i>Отправка</span><span class="down"><i></i>Получение</span><span>До 24 часов · замер ~10 с · UTC</span></div></section><section class="card"><div class="card-title"><h2>Службы и версия</h2><span class="pill">{esc(current)}</span></div><div class="node-label"><i></i><div class="node-domain">{esc(domain)}</div></div><div class="service-list live-block" data-live-block="services">{services_html}</div><div class="update-box"><div class="actions"><button id="checkUpdate">{icon('refresh')}Загрузить версии</button></div><div class="version-row"><label for="panelRelease">Панель</label><select id="panelRelease" aria-label="Версия панели"><option>Сначала загрузите список</option></select><button class="primary" id="startUpdate" hidden>Установить</button></div><p id="updateStatus" role="status">Можно обновиться или вернуться на прежний стабильный релиз GitLab</p></div></section></div><section class="card version-manager"><div class="card-title"><div><h2>Версии компонентов</h2><p>Обновление и откат без выпуска новой версии панели</p></div><button id="checkComponents">{icon('refresh')}Загрузить версии</button></div><div class="version-row"><label for="xrayRelease">Xray</label><select id="xrayRelease"><option>Сначала загрузите список</option></select><button data-component-install="xray" class="primary" disabled>Установить</button><small class="version-state" id="xrayCurrent">Текущая версия определяется…</small></div><div class="version-row"><label for="openfluxRelease">OpenFlux</label><select id="openfluxRelease"><option>Сначала загрузите список</option></select><button data-component-install="openflux" class="primary" disabled>Установить</button><small class="version-state" id="openfluxCurrent">Текущая версия определяется…</small></div><p id="componentStatus" class="note" role="status">Перед заменой создаётся резервная копия. Если служба не запустится, прежний бинарник восстановится автоматически.</p></section><div class="two-col equal"><section class="card"><div class="card-title"><h2>Ресурсы сервера</h2><span class="pill">VPS</span></div><div class="detail-list live-block" data-live-block="server-details">{details}</div></section><section class="card"><div class="card-title"><h2>Накопленный трафик</h2></div><div class="detail-list live-block" data-live-block="traffic-details"><div class="detail-line"><span>Отправлено</span><strong>↑ {size(total_up)}</strong></div><div class="detail-line"><span>Получено</span><strong>↓ {size(total_down)}</strong></div><div class="detail-line"><span>Последнее измерение</span><strong>{str(age)+' с назад' if latest else 'Нет измерений'}</strong></div></div><p class="note">Только трафик прокси. Активность — передача данных за последние 90 секунд, не число устройств онлайн.</p></section></div><section class="card"><div class="card-title"><h2>Пользователи и подписки</h2><a href="{esc(path)}/users" class="btn quiet">Управление →</a></div><div class="live-block" data-live-block="clients">{client_glances(shown,path)}<small>Показано {len(shown)} из {len(records)} · сначала передающие данные</small></div></section>'''
+    return component_modal+f'''<div data-live-block="health" class="live-block">{health}</div><section class="card resource-deck live-block" data-live-block="resources"><div class="resource-grid">{''.join(resources)}</div></section><div class="overview-stats live-block" data-live-block="overview">{stats}</div><div class="dashboard-grid"><section class="card graph-card"><div class="card-title"><div><span class="eyebrow">TRAFFIC / LIVE HISTORY</span><h2>Трафик прокси</h2></div><div class="range">{controls}</div></div><div class="graph-speeds live-block" data-live-block="speeds"><div><span>↑ Отправка</span><b>{size(latest.get('up_rate')) if traffic_fresh else '—'}</b><small> / с</small></div><div><span>↓ Получение</span><b>{size(latest.get('down_rate')) if traffic_fresh else '—'}</b><small> / с</small></div></div><div class="chart-wrap live-block" data-live-block="chart">{graph}</div><div class="legend"><span><i></i>Отправка</span><span class="down"><i></i>Получение</span><span>До 24 часов · замер ~10 с · UTC</span></div></section><section class="card"><div class="card-title"><h2>Службы и версия</h2><span class="pill">{esc(current)}</span></div><div class="node-label"><i></i><div class="node-domain">{esc(domain)}</div></div><div class="service-list live-block" data-live-block="services">{services_html}</div><div class="update-box"><div class="actions"><button id="checkUpdate">{icon('refresh')}Загрузить версии</button></div><div class="version-row"><label for="panelRelease">Панель</label><select id="panelRelease" aria-label="Версия панели"><option>Сначала загрузите список</option></select><button class="primary" id="startUpdate" hidden>Установить</button></div><p id="updateStatus" role="status">Можно обновиться или вернуться на прежний стабильный релиз GitLab</p></div></section></div><section class="card version-manager"><div class="card-title"><div><h2>Версии компонентов</h2><p>Обновление и откат без выпуска новой версии панели</p></div><button id="checkComponents">{icon('refresh')}Загрузить версии</button></div><div class="version-row"><label for="xrayRelease">Xray</label><select id="xrayRelease"><option>Сначала загрузите список</option></select><button data-component-install="xray" class="primary" disabled>Установить</button><small class="version-state" id="xrayCurrent">Текущая версия определяется…</small></div><div class="version-row"><label for="openfluxRelease">OpenFlux</label><select id="openfluxRelease"><option>Сначала загрузите список</option></select><button data-component-install="openflux" class="primary" disabled>Установить</button><small class="version-state" id="openfluxCurrent">Текущая версия определяется…</small></div><p id="componentStatus" class="note" role="status">Перед заменой создаётся резервная копия. Если служба не запустится, прежний бинарник восстановится автоматически.</p></section><div class="two-col equal"><section class="card"><div class="card-title"><h2>Ресурсы сервера</h2><span class="pill">VPS</span></div><div class="detail-list live-block" data-live-block="server-details">{details}</div></section><section class="card"><div class="card-title"><h2>Накопленный трафик</h2></div><div class="detail-list live-block" data-live-block="traffic-details"><div class="detail-line"><span>Отправлено</span><strong>↑ {size(total_up)}</strong></div><div class="detail-line"><span>Получено</span><strong>↓ {size(total_down)}</strong></div><div class="detail-line"><span>Последнее измерение</span><strong>{str(age)+' с назад' if latest else 'Нет измерений'}</strong></div></div><p class="note">Только трафик прокси. Активность — передача данных за последние 90 секунд, не число устройств онлайн.</p></section></div><section class="card"><div class="card-title"><h2>Пользователи и подписки</h2><a href="{esc(path)}/users" class="btn quiet">Управление →</a></div><div class="live-block" data-live-block="clients">{client_glances(shown,path)}<small>Показано {len(shown)} из {len(records)} · сначала передающие данные</small></div></section><section class="card nodes-live-card"><div class="card-title"><div><h2>Ноды · трафик и пользователи</h2><p>Живые данные с подключённых нод, опрос раз в 15 секунд</p></div><span class="pill">{len((nodes or {}).get('nodes') or [])} / 16</span></div><div class="live-block" data-live-block="nodes">{nodes_glances(nodes,path)}</div></section>'''
 
 
 
@@ -1452,9 +1510,9 @@ def _top_consumers_card(path, profiles, traffic, limit=5):
             f'<div class="top-list">{items}</div></section>')
 
 
-def dashboard_body(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours=1):
+def dashboard_body(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours=1, nodes=None):
     """Dashboard overview without version management controls."""
-    body = _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours)
+    body = _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours, nodes=nodes)
     replacement = (f'<div class="update-box"><div class="actions">'
                    f'<a class="btn quiet" href="{esc(path)}/updates">{icon("refresh")}Управление обновлениями</a>'
                    f'</div><p>Версии панели, Xray и OpenFlux находятся в отдельном разделе.</p></div>'

@@ -321,3 +321,9 @@ def delete_profile(node, external_id):
 def purge_profiles(node):
     """Remove profiles issued through the federation API on one managed node."""
     return request(node, 'POST', API_PREFIX + '/federation/purge', {}, timeout=30)
+
+
+def metrics(node, timeout=10):
+    """Proxy traffic totals and per-profile activity from one managed node."""
+    data = request(node, 'GET', API_PREFIX + '/metrics', timeout=timeout)
+    return data if isinstance(data, dict) else {}

@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.37..."
+    echo "Updating Onyx Panel 1.8.38..."
 else
-    echo "Configuring Onyx Panel 1.8.37..."
+    echo "Configuring Onyx Panel 1.8.38..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -1727,6 +1727,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor
 from onyx_subscriptions import PREFIX as SUB_PREFIX
 from onyx_panel_extras import preview_document
 from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, openflux_ui, client_records, nodes_ui, cascade_ui, cascade_state_view, routing_ui, updates_ui, icon
@@ -1779,6 +1780,10 @@ CASCADES_FILE="/var/lib/onyx-panel/cascades.json"
 ROUTING_FILE="/var/lib/onyx-panel/routing.json"
 RESTART_STATUS="/var/lib/onyx-panel/restart-status.json"
 API_KEY=node_api.ensure_api_key(API_KEY_FILE)
+# Live node snapshot for the dashboard: fetched in the background so a slow or
+# offline node never delays /dashboard-data itself.
+NODES_LIVE={"stamp":0.0,"fetching":False,"data":[]}
+NODES_LIVE_LOCK=threading.Lock()
 SUB_FETCH_SLOTS=threading.BoundedSemaphore(4)
 SUB_RATE_LOCK=threading.Lock()
 SUB_REQUESTS={}
@@ -2256,6 +2261,86 @@ def purge_remote_profiles_async(subscription,device_id=None):
     if not subscription: return
     threading.Thread(target=purge_remote_profiles,args=(subscription,device_id),
                      name="onyx-node-cleanup",daemon=True).start()
+
+def federation_names():
+    """federation_id -> (subscription, device) labels, rebuilt from the registry."""
+    mapping={}
+    for sub in subscription_registry():
+        for device in sub.get("devices",[]) or []:
+            if device.get("revoked"): continue
+            mapping[federation_id(sub.get("id",""),device.get("id",""))]=(sub.get("name","Подписка"),device.get("name","Устройство"))
+    return mapping
+
+def fetch_node_live(node,names):
+    """One node snapshot: totals plus federated users mapped back by id."""
+    snapshot={"url":node.get("url",""),"country_code":node.get("country_code","UN"),
+              "country_name":node.get("country_name","Сервер"),"location":node.get("name",""),
+              "enabled":bool(node.get("enabled",True)),"online":False,"error":"",
+              "rates":{"up":None,"down":None},"totals":{"up":0,"down":0},"users":[]}
+    if not snapshot["enabled"]:
+        snapshot["error"]="Нода отключена в этой панели."
+        return snapshot
+    try:
+        data=node_api.metrics(node)
+    except node_api.NodeError as exc:
+        text=str(exc)
+        if "not found" in text.lower():
+            snapshot["error"]="Нода не поддерживает статистику — обновите Onyx Panel на ноде."
+        else:
+            snapshot["error"]="Нода не отвечает или отклонила API-токен."
+        return snapshot
+    except Exception as exc:
+        snapshot["error"]="Неизвестная ошибка опроса ноды."
+        print("node metrics failed:",node.get("url"),type(exc).__name__,file=sys.stderr,flush=True)
+        return snapshot
+    totals=data.get("totals") if isinstance(data.get("totals"),dict) else {}
+    snapshot["online"]=True
+    snapshot["rates"]={"up":totals.get("up_rate"),"down":totals.get("down_rate")}
+    snapshot["totals"]={"up":max(0,int(totals.get("up",0) or 0)),"down":max(0,int(totals.get("down",0) or 0))}
+    for profile in data.get("profiles",[]) or []:
+        if not isinstance(profile,dict): continue
+        label=names.get(str(profile.get("federation_id","")))
+        if label is None: continue
+        snapshot["users"].append({"name":label[0],"device":label[1],
+            "protocol":str(profile.get("protocol","")),"active":bool(profile.get("active")),
+            "up":max(0,int(profile.get("up",0) or 0)),"down":max(0,int(profile.get("down",0) or 0))})
+    snapshot["users"].sort(key=lambda u:(not u["active"],-(u["up"]+u["down"])))
+    return snapshot
+
+def refresh_nodes_live():
+    try:
+        nodes=node_api.load_nodes(NODES_FILE)
+        names=federation_names()
+        worker=lambda node: fetch_node_live(node,names)
+        if nodes:
+            with ThreadPoolExecutor(max_workers=min(8,len(nodes))) as pool:
+                data=list(pool.map(worker,nodes))
+        else:
+            data=[]
+        with NODES_LIVE_LOCK:
+            NODES_LIVE["stamp"]=time.time()
+            NODES_LIVE["data"]=data
+    except Exception as exc:
+        # Advance the stamp even on failure so a broken registry cannot
+        # re-trigger a refresh thread on every dashboard poll.
+        print("node live refresh failed:",type(exc).__name__,file=sys.stderr,flush=True)
+        with NODES_LIVE_LOCK:
+            NODES_LIVE["stamp"]=time.time()
+    finally:
+        with NODES_LIVE_LOCK:
+            NODES_LIVE["fetching"]=False
+
+def nodes_live(max_age=15):
+    """Cached node snapshots; a background refresh runs at most every max_age seconds."""
+    with NODES_LIVE_LOCK:
+        stamp=float(NODES_LIVE.get("stamp",0.0))
+        stale=time.time()-stamp>max_age
+        if stale and not NODES_LIVE.get("fetching"):
+            NODES_LIVE["fetching"]=True
+            threading.Thread(target=refresh_nodes_live,name="onyx-nodes-live",daemon=True).start()
+        data=NODES_LIVE.get("data",[])
+        age=int(time.time()-stamp) if stamp else None
+    return {"nodes":data,"age":age}
 def allow_subscription_request(client):
     now=time.monotonic()
     with SUB_RATE_LOCK:
@@ -2466,7 +2551,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.37","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.38","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2475,6 +2560,25 @@ class Handler(BaseHTTPRequestHandler):
                     result.append({"id":user["id"],"name":user["name"],"protocol":user["protocol"],
                         "enabled":user.get("enabled",True),"link":proxy_link(user["protocol"],user["secret"],user.get("backend_port",443),user["name"],user.get("username",""))})
                 self.send_json({"ok":True,"profiles":result}); return
+            if path==node_api.API_PREFIX+"/metrics":
+                # Per-profile counters for the controller dashboard. Only the
+                # opaque federation id leaves the node, never links or secrets.
+                state=traffic()
+                latest=server_metrics.read_state().get("latest",{})
+                profiles=[]
+                for user in users():
+                    item=state.get(user["id"],{})
+                    if not isinstance(item,dict): item={}
+                    last=int(item.get("last_change",0) or 0)
+                    profiles.append({"id":user["id"],"federation_id":str(user.get("federation_id","")),
+                        "protocol":user.get("protocol",""),"enabled":user.get("enabled",True),
+                        "up":max(0,int(item.get("up",0) or 0)),"down":max(0,int(item.get("down",0) or 0)),
+                        "active":bool(item.get("service_active")) and last>0 and time.time()-last<=90})
+                self.send_json({"ok":True,
+                    "totals":{"up":max(0,int(latest.get("up",0) or 0)),"down":max(0,int(latest.get("down",0) or 0)),
+                              "up_rate":latest.get("up_rate"),"down_rate":latest.get("down_rate"),
+                              "fresh":bool(latest.get("traffic_fresh")),"time":latest.get("time",0)},
+                    "profiles":profiles}); return
             self.send_json({"ok":False,"message":"Not found"},404); return
         if path.startswith(SUB_PREFIX):
             self.serve_subscription(path[len(SUB_PREFIX):]); return
@@ -2586,7 +2690,7 @@ class Handler(BaseHTTPRequestHandler):
             if hours not in (1,6,24): hours=1
             profiles=[{"id":"primary","name":"Основной WEB Proxy","secret":primary(),"protocol":"web","enabled":True,"backend_port":443}]+users()
             body=dashboard_body(server_metrics.dashboard_data(hours),subscription_registry(),profiles,traffic(),
-                                PANEL_PATH,DOMAIN,self.csrf(),proxy_link,web_updates.current_version(),hours)
+                                PANEL_PATH,DOMAIN,self.csrf(),proxy_link,web_updates.current_version(),hours,nodes=nodes_live())
             if path.endswith("/dashboard-data"):
                 self.send_json({"html":body,"update":web_updates.get_status()})
             else:
@@ -4251,7 +4355,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.37
+Description=Onyx Panel 1.8.38
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4807,9 +4911,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.37 UPDATED"
+echo "          Onyx Panel 1.8.38 UPDATED"
 else
-echo "         Onyx Panel 1.8.37 IS READY"
+echo "         Onyx Panel 1.8.38 IS READY"
 fi
 echo "============================================================"
 echo
