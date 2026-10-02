@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.4..."
+    echo "Updating Onyx Panel 1.8.5..."
 else
-    echo "Configuring Onyx Panel 1.8.4..."
+    echo "Configuring Onyx Panel 1.8.5..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2452,7 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.4","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.5","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2720,7 +2720,7 @@ class Handler(BaseHTTPRequestHandler):
 <section class="panel-setting"><div class="panel-setting-info"><b>Ключи внешнего API</b><small>REST API для ботов и биллингов: Bearer-токен в заголовке Authorization, адрес <code>{panel_url}/api/v1/clients</code>.</small></div><div>{api_rows or '<p class="muted" style="font-size:12px;margin:6px 0">Ключей пока нет.</p>'}</div><form id="apiKeyForm" action="{PANEL_PATH}/api-keys-create"><input type="hidden" name="csrf" value="{token}"><div class="admin-access-grid"><div><label for="apiKeyName">Название нового ключа</label><input id="apiKeyName" name="name" maxlength="60" placeholder="Например, Бот продаж" autocomplete="off"></div></div><div class="actions"><button type="submit" class="btn primary">Создать ключ</button></div><p class="panel-setting-status" id="apiKeyStatus" role="status"></p></form></section>
 <section class="panel-setting"><div class="panel-setting-info"><b>Журнал входов</b><small>Последние входы в панель. «Новое устройство» — первый вход с такого браузера.</small></div><table class="login-log"><tr><th>Время</th><th>Кто</th><th>IP</th><th>Устройство</th></tr>{login_rows}</table></section>
 </div></div>
-<dialog id="totpDialog" class="create-dialog"><div class="dialog-head"><div><h2>Включение 2FA</h2><small>Отсканируйте QR в приложении-аутентификаторе</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><div style="padding:0 4px"><img id="totpQr" alt="QR-код TOTP" style="width:180px;height:180px;display:block;margin:0 auto" hidden><p class="muted" style="font-size:11px;word-break:break-all">Секрет: <code id="totpSecret"></code></p><label for="totpCode">Введите код из приложения</label><input id="totpCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><div class="actions create-actions"><button type="button" data-close-dialog>Отмена</button><button class="primary" id="totpConfirm">Включить</button></div></div></dialog>
+<dialog id="totpDialog" class="totp-dialog"><button type="button" class="totp-close" data-close-dialog aria-label="Закрыть">×</button><svg class="totp-mark" viewBox="0 0 128 128" aria-hidden="true"><g transform="translate(14 14)"><path fill="#FF792D" d="M50 5C25 5 5 25 5 50C5 63 10 74 19 82C10 57 24 31 50 28C66 26 77 31 87 40C82 20 67 5 50 5Z M50 95C75 95 95 75 95 50C95 37 90 26 81 18C90 43 76 69 50 72C34 74 23 69 13 60C18 80 33 95 50 95Z"/></g></svg><h2>Включение 2FA</h2><p class="totp-hint">Отсканируйте QR в приложении-аутентификаторе</p><img id="totpQr" alt="QR-код TOTP" hidden><p class="totp-secret-line">Секрет: <code id="totpSecret"></code></p><p class="totp-otp-label">Введите код из приложения</p><div class="totp-cells" id="totpCells"><input inputmode="numeric" maxlength="1" autocomplete="one-time-code"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"></div><input type="hidden" id="totpCode"><p class="totp-status" id="totpDialogStatus" role="status"></p><div class="totp-actions"><button type="button" class="btn quiet" data-close-dialog>Отмена</button><button type="button" class="primary" id="totpConfirm">Включить</button></div></dialog>
 <dialog id="apiKeyDialog" class="create-dialog"><div class="dialog-head"><div><h2>Ключ создан</h2><small>Токен показывается только один раз — сохраните его</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><div style="padding:0 4px"><textarea class="code-editor" id="apiKeyToken" readonly style="min-height:74px"></textarea><div class="actions create-actions"><button type="button" class="btn" id="apiKeyCopy">Скопировать</button><button type="button" class="btn primary" data-close-dialog>Готово</button></div></div></dialog>'''
             panel_js='''<script>
 (()=>{async function submit(form,status,done){
@@ -2828,15 +2828,19 @@ const fd=new FormData(f),payload={};fd.forEach((v,k)=>payload[k]=v);
 try{const res=await post(f.getAttribute("action"),payload);s.className="panel-setting-status ok";s.textContent=res.message||"Готово.";if(window.onyxToast)onyxToast(res.message||"Сохранено.")}
 catch(err){s.className="panel-setting-status err";s.textContent=err.message;if(window.onyxToast)onyxToast(err.message,"err")}})});
 const totpSetupBtn=document.getElementById("totpSetupBtn"),totpDialog=document.getElementById("totpDialog");
-if(totpSetupBtn){const s=document.getElementById("totpStatus"),codeInput=document.getElementById("totpCode");
+if(totpSetupBtn){const s=document.getElementById("totpDialogStatus"),codeHidden=document.getElementById("totpCode");
+const cells=Array.from(document.querySelectorAll("#totpCells input"));
+const syncCode=()=>{codeHidden.value=cells.map(c=>c.value).join("")};
+cells.forEach((cell,i)=>{cell.addEventListener("input",()=>{cell.value=cell.value.replace(/\D/g,"").slice(0,1);if(cell.value&&i<cells.length-1)cells[i+1].focus();syncCode()});cell.addEventListener("keydown",e=>{if(e.key==="Backspace"&&!cell.value&&i>0){cells[i-1].focus();cells[i-1].value="";syncCode();e.preventDefault()}});cell.addEventListener("paste",e=>{const digits=(e.clipboardData||window.clipboardData).getData("text").replace(/\D/g,"");if(!digits)return;e.preventDefault();digits.split("").slice(0,cells.length).forEach((d,j)=>cells[j].value=d);cells[Math.min(digits.length,cells.length-1)].focus();syncCode()})});
 totpSetupBtn.addEventListener("click",async()=>{s.className="panel-setting-status";s.textContent="Готовлю секрет…";
 try{const res=await post(PATH+"/totp-setup",{csrf:CSRF});
 document.getElementById("totpSecret").textContent=res.secret||"";
 const img=document.getElementById("totpQr");if(res.qr){img.src=res.qr;img.hidden=false}else img.hidden=true;
-s.textContent="";codeInput.value="";totpDialog.showModal()}catch(err){s.className="panel-setting-status err";s.textContent=err.message}});}
+const dstatus=document.getElementById("totpDialogStatus");dstatus.textContent="";dstatus.className="totp-status";
+cells.forEach(c=>c.value="");codeHidden.value="";cells[0].focus();totpDialog.showModal()}catch(err){s.className="panel-setting-status err";s.textContent=err.message}});}
 const totpConfirm=document.getElementById("totpConfirm");
 if(totpConfirm)totpConfirm.addEventListener("click",async()=>{
-const s=document.getElementById("totpStatus");s.className="panel-setting-status";s.textContent="Проверяю код…";
+const s=document.getElementById("totpDialogStatus");s.className="totp-status";s.textContent="Проверяю код…";
 try{const res=await post(PATH+"/totp-enable",{csrf:CSRF,code:document.getElementById("totpCode").value.trim()});
 s.className="panel-setting-status ok";s.textContent=res.message;document.getElementById("totpDialog").close();setTimeout(()=>location.reload(),900)}
 catch(err){s.className="panel-setting-status err";s.textContent=err.message}});
@@ -3618,11 +3622,13 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
                 if async_action: self.send_json({"ok":False,"message":msg},400)
                 else: self.send_html(esc(msg),400)
             raw=form.get("backup","").strip()
+            if raw.startswith("data:"): raw=raw.split(",",1)[-1].strip()
+            raw=re.sub(r"\s+","",raw)
             if not raw:
                 imp_fail("Выберите файл резервной копии или вставьте его содержимое."); return
             try: blob=base64.b64decode(raw,validate=True)
             except Exception:
-                imp_fail("Не удалось прочитать данные: нужен файл резервной копии (.tar.gz)."); return
+                imp_fail("Не удалось прочитать файл как резервную копию. Выберите заново файл .tar.gz из Экспорта и попробуйте ещё раз."); return
             if len(blob)>12*1024*1024:
                 imp_fail("Архив слишком большой (лимит 12 МБ)."); return
             try:
@@ -4182,7 +4188,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.4
+Description=Onyx Panel 1.8.5
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4738,9 +4744,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.4 UPDATED"
+echo "          Onyx Panel 1.8.5 UPDATED"
 else
-echo "         Onyx Panel 1.8.4 IS READY"
+echo "         Onyx Panel 1.8.5 IS READY"
 fi
 echo "============================================================"
 echo
