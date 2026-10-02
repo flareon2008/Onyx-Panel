@@ -447,9 +447,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.29..."
+    echo "Updating Onyx Panel 1.8.30..."
 else
-    echo "Configuring Onyx Panel 1.8.29..."
+    echo "Configuring Onyx Panel 1.8.30..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2456,7 +2456,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.29","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.30","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2825,7 +2825,7 @@ if(compGrid){
           compRingText.textContent=Math.floor((Date.now()-started)/1000)+" с";
           let st;
           try{st=await compApi(statusUrl,{csrf:compCsrf});misses=0}
-          catch(e){if(++misses>=10)throw e;compText.textContent="Связь прервалась ("+misses+"/10) — продолжаем ждать…";continue}
+          catch(e){if(++misses>=30)throw e;compText.textContent="Связь прервалась ("+misses+"/30) — продолжаем ждать…";continue}
           if(st.phase==="done"){compShow("done",item.row.dataset.label,st.message||"Готово.");item.status.className="component-item-status ok";item.status.textContent=st.message||"Готово.";compRefresh().catch(()=>{});setTimeout(compHide,2600);return}
           if(st.phase==="failed"){compShow("err",item.row.dataset.label,st.message||"Не удалось.");item.status.className="component-item-status err";item.status.textContent=st.message||"Не удалось.";return}
           compText.textContent=st.message||"Устанавливаю… "+(i*3)+" c";
@@ -4237,7 +4237,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.29
+Description=Onyx Panel 1.8.30
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4793,9 +4793,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.29 UPDATED"
+echo "          Onyx Panel 1.8.30 UPDATED"
 else
-echo "         Onyx Panel 1.8.29 IS READY"
+echo "         Onyx Panel 1.8.30 IS READY"
 fi
 echo "============================================================"
 echo

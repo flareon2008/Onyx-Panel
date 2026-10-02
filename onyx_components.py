@@ -227,8 +227,10 @@ def start(component, tag):
 
 
 def _download(url, destination):
+    # --limit-rate keeps the VPS ingress from saturating while the release
+    # downloads, otherwise the operator's own panel polls start timing out.
     result = _run(["curl", "-fL", "--retry", "3", "--retry-all-errors", "--connect-timeout", "20",
-                   "--max-time", "300", "-o", str(destination), url], timeout=360)
+                   "--limit-rate", "4M", "--max-time", "600", "-o", str(destination), url], timeout=700)
     if result.returncode or not destination.is_file() or destination.stat().st_size < 100000:
         raise RuntimeError("Не удалось скачать выбранный релиз. Возможно, в нём нет сборки для Linux — попробуйте другую версию.")
 
