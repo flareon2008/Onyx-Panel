@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.2..."
+    echo "Updating Onyx Panel 1.8.3..."
 else
-    echo "Configuring Onyx Panel 1.8.2..."
+    echo "Configuring Onyx Panel 1.8.3..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2452,7 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.2","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.3","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2872,10 +2872,10 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
 </div>
 <p class="muted" style="font-size:11px;margin:10px 0 0">Перед заменой бинарника создаётся его копия; если новая версия не запустится, предыдущая вернётся автоматически. MTProto собирается из исходников, закреплённых за версией панели.</p></div>
 <div class="card"><div class="card-title"><div><h2>Резервная копия</h2><p>Настройки, пользователи, заглушки и конфигурации — одним архивом</p></div></div>
-<form id="importForm" action="{PANEL_PATH}/import"><input type=hidden name=csrf value="{token}"><input type=hidden name="backup" id="importData"><input type="file" id="importFile" accept=".tar.gz,.tgz,application/gzip" hidden><div class="actions" style="margin:4px 0 0"><a class="btn primary" href="{PANEL_PATH}/export" download>Экспорт</a><button type="button" class="btn" id="importPick">Импорт</button><button type="submit" hidden></button></div><p class="panel-setting-status" id="importStatus" role="status"></p></form></div></div></div>
+<form id="importForm" action="{PANEL_PATH}/import"><input type=hidden name=csrf value="{token}"><input type=hidden name="backup" id="importData"><input type="file" id="importFile" accept=".tar.gz,.tgz,.tar,application/gzip" hidden><div class="actions" style="margin:4px 0 0"><a class="btn primary" href="{PANEL_PATH}/export" download>Экспорт</a><button type="button" class="btn" id="importPick">Импорт</button><button type="submit" hidden></button></div><p class="panel-setting-status" id="importStatus" role="status"></p></form></div></div></div>
 {extra_cards}
 {editor}
-{panel_js}{security_js}'''
+{panel_js}{security_js.replace("@@PATH@@",json.dumps(PANEL_PATH)).replace("@@CSRF@@",json.dumps(token))}'''
             self.send_html(layout("Настройки",body,"settings",self.csrf())); return
 
         self.redirect("/")
@@ -3626,10 +3626,10 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
             if len(blob)>12*1024*1024:
                 imp_fail("Архив слишком большой (лимит 12 МБ)."); return
             try:
-                tar=tarfile.open(fileobj=io.BytesIO(blob),mode="r:gz")
+                tar=tarfile.open(fileobj=io.BytesIO(blob),mode="r:*")
                 members=tar.getmembers()
             except Exception:
-                imp_fail("Архив повреждён или это не tar.gz."); return
+                imp_fail("Архив повреждён или это не резервная копия панели."); return
             if len(members)>200:
                 imp_fail("В архиве слишком много файлов."); return
             allow={"panel","onyx-panel","onyx-panel-xray"}
@@ -4182,7 +4182,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.2
+Description=Onyx Panel 1.8.3
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4738,9 +4738,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.2 UPDATED"
+echo "          Onyx Panel 1.8.3 UPDATED"
 else
-echo "         Onyx Panel 1.8.2 IS READY"
+echo "         Onyx Panel 1.8.3 IS READY"
 fi
 echo "============================================================"
 echo

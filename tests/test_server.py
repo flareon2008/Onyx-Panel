@@ -121,6 +121,8 @@ out=h9.output()
 for marker in ("Уведомления Telegram","tgForm","Автобэкап","totpSetupBtn","observerForm","apiKeyForm","login-log","Журнал входов"):
     assert marker in out, "missing: "+marker
 assert 'data-role="admin"' in out
+assert "@@" not in out, "unreplaced script placeholder leaked into the settings page"
+assert "importPick" in out and "/import" in out, "backup import form missing"
 print("9) settings page new cards OK")
 
 h10=FakeHandler("GET", srv.PANEL_PATH+"/cascade", dict([cka])); h10.do_GET()
