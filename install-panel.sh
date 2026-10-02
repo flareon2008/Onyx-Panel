@@ -447,9 +447,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.27..."
+    echo "Updating Onyx Panel 1.8.28..."
 else
-    echo "Configuring Onyx Panel 1.8.27..."
+    echo "Configuring Onyx Panel 1.8.28..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2456,7 +2456,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.27","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.28","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2796,7 +2796,7 @@ if(compGrid){
   const compCsrf=compGrid.dataset.csrf,checkUrl=compGrid.dataset.check,installUrl=compGrid.dataset.install,statusUrl=compGrid.dataset.status,verifyUrl=compGrid.dataset.verify;
   const compRows={};
   compGrid.querySelectorAll("[data-component]").forEach(row=>{compRows[row.dataset.component]={row,ver:row.querySelector("[data-ver]"),sel:row.querySelector("select"),btn:row.querySelector("button"),status:row.querySelector(".component-item-status")}});
-  async function compApi(url,body){const r=await fetch(url,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams(body)});let j;try{j=await r.json()}catch(e){throw new Error("Панель недоступна. Проверьте связь и попробуйте снова.")}if(!r.ok)throw new Error(j.message||"Не выполнено.");return j}
+  async function compApi(url,body){let lastErr=null;for(let a=0;a<3;a++){if(a)await new Promise(r=>setTimeout(r,1500));try{const r=await fetch(url,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams(body),signal:window.AbortSignal?AbortSignal.timeout(15000):undefined});let j;try{j=await r.json()}catch(e){lastErr=new Error("Панель не отвечает. Проверьте связь и попробуйте снова.");continue}if(!r.ok)throw new Error(j.message||"Не выполнено.");return j}catch(e){if(!String(e.message||e).startsWith("Панель не отвечает"))throw e;lastErr=e}}throw lastErr||new Error("Панель не отвечает.")}
   const compOverlay=document.createElement("div");compOverlay.className="move-overlay";compOverlay.hidden=true;
   compOverlay.innerHTML='<div class="move-card" id="compCard"><div class="move-ring" id="compRing"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" cx="50" cy="50" r="44"/></svg><b id="compRingText">↑</b></div><h3 id="compTitle">Обновление</h3><p id="compText"></p><div class="actions upd-actions"><button type="button" id="compClose" hidden>Закрыть</button></div></div>';
   document.body.append(compOverlay);
@@ -2804,7 +2804,7 @@ if(compGrid){
   function compShow(state,title,text){compCard.classList.remove("spin","upd-done","upd-err");compClose.hidden=true;compTitle.textContent=title;compText.textContent=text||"";if(state==="running"){compCard.classList.add("spin");compRingText.textContent="↑"}else if(state==="done"){compCard.classList.add("upd-done");compRingText.textContent="✓";compClose.hidden=false}else{compCard.classList.add("upd-err");compRingText.textContent="!";compClose.hidden=false}compOverlay.hidden=false;requestAnimationFrame(()=>compOverlay.classList.add("show"))}
   function compHide(){compOverlay.classList.remove("show");setTimeout(()=>{compOverlay.hidden=true},260)}
   compClose.addEventListener("click",compHide);
-  async function compRefresh(){const d=await compApi(checkUrl,{csrf:compCsrf});Object.keys(compRows).forEach(n=>{const item=compRows[n];item.ver.textContent=(d.current&&d.current[n])||"—";if(item.sel){const tags=(d.catalog&&d.catalog[n])||[];const cur=(d.current&&d.current[n])||"";const wanted="v"+cur;const list=tags.slice(0,6);if(wanted&&list.indexOf(wanted)<0&&tags.indexOf(wanted)>=0)list.push(wanted);item.sel.innerHTML="";list.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t===wanted?t+" — установлена":t;item.sel.appendChild(o)});if(wanted&&list.indexOf(wanted)>=0)item.sel.value=wanted}});return d}
+  async function compRefresh(){const d=await compApi(checkUrl,{csrf:compCsrf});Object.keys(compRows).forEach(n=>{const item=compRows[n];item.ver.textContent=(d.current&&d.current[n])||"—";if(item.sel){const tags=(d.catalog&&d.catalog[n])||[];const cur=(d.current&&d.current[n])||"";const wanted="v"+cur;const bad=(n==='openflux'&&(d.unsuitable&&d.unsuitable[n]||[]))||[];const list=tags.slice(0,6);bad.forEach(t=>{if(list.indexOf(t)<0)list.push(t)});if(wanted&&list.indexOf(wanted)<0&&tags.indexOf(wanted)>=0)list.push(wanted);list.sort((a,b)=>{const p=s=>s.replace(/^v/,"").split(".").map(Number),x=p(a),y=p(b);for(let i=0;i<4;i++){if((x[i]||0)!==(y[i]||0))return (y[i]||0)>(x[i]||0)?1:-1}return 0});item.sel.innerHTML="";list.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t===wanted?t+" — установлена":(bad.indexOf(t)>=0?t+" · нет сборки для Linux":t);item.sel.appendChild(o)});if(wanted&&list.indexOf(wanted)>=0)item.sel.value=wanted}});return d}
   async function compVerify(n,target,hint){if(n!=="openflux"||!target)return;hint.hidden=false;hint.className="component-hint";hint.textContent="Проверяю версию "+target.replace(/^v/,"")+"…";try{const r=await compApi(verifyUrl,{csrf:compCsrf,component:n,target});hint.className="component-hint "+(r.ok?"ok":"err");hint.textContent=r.ok?target.replace(/^v/,"")+" подходит для установки.":(r.message||"Версия не подходит для установки.")}catch(e){hint.hidden=true}}
   Object.keys(compRows).forEach(n=>{if(n==="openflux"&&compRows[n].sel)compRows[n].sel.addEventListener("change",()=>compVerify(n,compRows[n].sel.value,compRows[n].status))});
   compRefresh().catch(()=>{Object.values(compRows).forEach(item=>{item.ver.textContent="—"})});
@@ -2817,14 +2817,15 @@ if(compGrid){
       compShow("running",item.row.dataset.label,"Скачиваем релиз и перезапускаем службу…");
       const started=Date.now();
       try{
-        await compApi(installUrl,{csrf:compCsrf,component:n,target});
+        try{await compApi(installUrl,{csrf:compCsrf,component:n,target})}
+        catch(e){if(!String(e.message).includes("уже выполняется"))throw e}
         let misses=0;
         for(let i=0;i<200;i++){
           await new Promise(r=>setTimeout(r,3000));
           compRingText.textContent=Math.floor((Date.now()-started)/1000)+" с";
           let st;
           try{st=await compApi(statusUrl,{csrf:compCsrf});misses=0}
-          catch(e){if(++misses>=3)throw e;compText.textContent="Связь прервалась — повторяем опрос…";continue}
+          catch(e){if(++misses>=10)throw e;compText.textContent="Связь прервалась ("+misses+"/10) — продолжаем ждать…";continue}
           if(st.phase==="done"){compShow("done",item.row.dataset.label,st.message||"Готово.");item.status.className="component-item-status ok";item.status.textContent=st.message||"Готово.";compRefresh().catch(()=>{});setTimeout(compHide,2600);return}
           if(st.phase==="failed"){compShow("err",item.row.dataset.label,st.message||"Не удалось.");item.status.className="component-item-status err";item.status.textContent=st.message||"Не удалось.";return}
           compText.textContent=st.message||"Устанавливаю… "+(i*3)+" c";
@@ -4236,7 +4237,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.27
+Description=Onyx Panel 1.8.28
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4792,9 +4793,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.27 UPDATED"
+echo "          Onyx Panel 1.8.28 UPDATED"
 else
-echo "         Onyx Panel 1.8.27 IS READY"
+echo "         Onyx Panel 1.8.28 IS READY"
 fi
 echo "============================================================"
 echo

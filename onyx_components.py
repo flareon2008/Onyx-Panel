@@ -105,28 +105,35 @@ def _current(component):
     return "установлен"
 
 
+def _openflux_releases():
+    """(suitable, unsuitable) OpenFlux tags from the GitHub releases API."""
+    repo = SPECS["openflux"]["repo"]
+    api = (repo[:-4] if repo.endswith(".git") else repo) + "/releases?per_page=30"
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    result = _run(["curl", "-fsSL", "--connect-timeout", "20", "--max-time", "40", api],
+                  timeout=60, env=env)
+    if result.returncode:
+        return None
+    try:
+        releases = json.loads(result.stdout)
+    except ValueError:
+        return None
+    if not isinstance(releases, list):
+        return None
+    suitable, unsuitable = [], []
+    for item in releases:
+        tag = str(item.get("tag_name", ""))
+        if not re.fullmatch(r"v\d+(?:\.\d+){1,3}", tag):
+            continue
+        has_linux = any(a.get("name") == "openflux-linux-amd64" for a in (item.get("assets") or []))
+        (suitable if has_linux else unsuitable).append(tag)
+    return suitable, unsuitable
+
+
 def _tags(component):
     spec = SPECS[component]
     if spec.get("mode") == "refresh":
         return ["refresh"]
-    if component == "openflux":
-        # Mobile-only releases (no openflux-linux-amd64 asset) cannot be
-        # installed — offer only tags whose release ships the server binary.
-        api = spec["repo"][:-4] + "/releases?per_page=30" if spec["repo"].endswith(".git") else spec["repo"] + "/releases?per_page=30"
-        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-        result = _run(["curl", "-fsSL", "--connect-timeout", "20", "--max-time", "40", api],
-                      timeout=60, env=env)
-        if result.returncode == 0:
-            try:
-                releases = json.loads(result.stdout)
-            except ValueError:
-                releases = None
-            if isinstance(releases, list):
-                tags = [str(item.get("tag_name", "")) for item in releases
-                        if re.fullmatch(r"v\d+(?:\.\d+){1,3}", str(item.get("tag_name", "")))
-                        and any(a.get("name") == "openflux-linux-amd64" for a in (item.get("assets") or []))]
-                return sorted(tags, key=_version_tuple, reverse=True)[:30]
-        # API unavailable — fall back to the plain tag list below.
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     result = _run(["git", "ls-remote", "--tags", "--refs", spec["repo"], "v[0-9]*"],
                   timeout=25, env=env)
@@ -139,13 +146,23 @@ def _tags(component):
 def catalog(force=False):
     state = read_state(STATUS)
     cached = state.get("catalog", {})
+    unsuitable = state.get("unsuitable", {})
     if force or time.time() - int(state.get("checked", 0)) > 300 or not cached:
-        cached = {name: _tags(name) for name in SPECS}
-        state.update(catalog=cached, checked=int(time.time()), phase="checked",
-                     message="Версии компонентов загружены.")
+        cached, unsuitable = {}, {}
+        for name in SPECS:
+            if name == "openflux":
+                releases = _openflux_releases()
+                if releases is not None:
+                    cached[name], unsuitable[name] = releases
+                else:
+                    cached[name] = _tags(name)
+            else:
+                cached[name] = _tags(name)
+        state.update(catalog=cached, unsuitable=unsuitable, checked=int(time.time()),
+                     phase="checked", message="Версии компонентов загружены.")
         atomic_json(STATUS, state)
     return {"current": {name: _current(name) for name in SPECS}, "catalog": cached,
-            "phase": state.get("phase", "idle"), "message": state.get("message", "")}
+            "unsuitable": unsuitable, "phase": state.get("phase", "idle"), "message": state.get("message", "")}
 
 
 _VERIFY_CACHE = {}
