@@ -332,7 +332,9 @@ install -d -o root -g root -m 0755 "$XRAY_ROOT"
 install -d -o root -g xray -m 0750 "$XRAY_CONFIG_DIR"
 install -d -o root -g xray -m 0750 "${XRAY_CONFIG_DIR}/tls"
 install -d -o xray -g xray -m 0750 /var/lib/onyx-panel-xray
-if [[ ! -x "$XRAY_BIN" ]] || ! "$XRAY_BIN" version 2>/dev/null | grep -q "${XRAY_VERSION}"; then
+if [[ -x "$XRAY_BIN" && -s "${XRAY_ROOT}/version" ]]; then
+    echo "      Xray $(cat "${XRAY_ROOT}/version") установлен менеджером компонентов — сохраняем версию."
+elif [[ ! -x "$XRAY_BIN" ]] || ! "$XRAY_BIN" version 2>/dev/null | grep -q "${XRAY_VERSION}"; then
     XRAY_ARCHIVE="$(mktemp /tmp/onyx-panel-xray.XXXXXX.zip)"
     XRAY_UNPACK="$(mktemp -d /tmp/onyx-panel-xray.XXXXXX)"
     XRAY_BUNDLED="${BASE}/assets/Xray-linux-64.zip"
@@ -352,6 +354,8 @@ if [[ ! -x "$XRAY_BIN" ]] || ! "$XRAY_BIN" version 2>/dev/null | grep -q "${XRAY
     install -o root -g root -m 0755 "$XRAY_UNPACK/xray" "$XRAY_BIN"
     rm -f "$XRAY_ARCHIVE"
     rm -rf "$XRAY_UNPACK"
+    printf '%s\n' "v${XRAY_VERSION}" > "${XRAY_ROOT}/version"
+    chmod 0644 "${XRAY_ROOT}/version"
 fi
 
 # The routing tab builds geoip:/geosite: rules, so the geo databases must sit
@@ -387,7 +391,9 @@ if ! id onyx-openflux >/dev/null 2>&1; then
     fi
 fi
 install -d -o root -g root -m 0755 "$OPENFLUX_ROOT"
-if [[ ! -x "$OPENFLUX_BIN" ]] || ! sha256sum "$OPENFLUX_BIN" | grep -q "^${OPENFLUX_SHA256}  "; then
+if [[ -x "$OPENFLUX_BIN" && -s "$OPENFLUX_ROOT/version" ]]; then
+    echo "      OpenFlux $(cat "$OPENFLUX_ROOT/version") установлен менеджером компонентов — сохраняем версию."
+elif [[ ! -x "$OPENFLUX_BIN" ]] || ! sha256sum "$OPENFLUX_BIN" | grep -q "^${OPENFLUX_SHA256}  "; then
     if [[ -s "$OPENFLUX_BUNDLED" ]]; then
         OPENFLUX_DOWNLOAD="$OPENFLUX_BUNDLED"
         echo "      Using OpenFlux included with this release."
@@ -402,11 +408,15 @@ if [[ ! -x "$OPENFLUX_BIN" ]] || ! sha256sum "$OPENFLUX_BIN" | grep -q "^${OPENF
     echo "${OPENFLUX_SHA256}  ${OPENFLUX_DOWNLOAD}" | sha256sum -c - >/dev/null || die "OpenFlux checksum verification failed."
     install -o root -g root -m 0755 "$OPENFLUX_DOWNLOAD" "$OPENFLUX_BIN"
     [[ "$OPENFLUX_DOWNLOAD" == "$OPENFLUX_BUNDLED" ]] || rm -f "$OPENFLUX_DOWNLOAD"
+    printf '%s\n' "$OPENFLUX_VERSION" > "$OPENFLUX_ROOT/version"
+    chmod 0644 "$OPENFLUX_ROOT/version"
+else
+    # The bundled binary is already in place without a component stamp — mark it.
+    printf '%s\n' "$OPENFLUX_VERSION" > "$OPENFLUX_ROOT/version"
+    chmod 0644 "$OPENFLUX_ROOT/version"
 fi
 # The OpenFlux binary cannot report its own version — the components manager
-# reads this file (the components installer rewrites it with the release tag).
-printf '%s\n' "$OPENFLUX_VERSION" > "$OPENFLUX_ROOT/version"
-chmod 0644 "$OPENFLUX_ROOT/version"
+# reads this file; component installs rewrite it with the release tag.
 
 # Remove only blocks managed by the former experimental NaiveProxy integration.
 # The distribution Caddy binary is retained and used again after this migration.
@@ -447,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.34..."
+    echo "Updating Onyx Panel 1.8.35..."
 else
-    echo "Configuring Onyx Panel 1.8.34..."
+    echo "Configuring Onyx Panel 1.8.35..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2456,7 +2466,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.34","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.35","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -4237,7 +4247,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.34
+Description=Onyx Panel 1.8.35
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4793,9 +4803,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.34 UPDATED"
+echo "          Onyx Panel 1.8.35 UPDATED"
 else
-echo "         Onyx Panel 1.8.34 IS READY"
+echo "         Onyx Panel 1.8.35 IS READY"
 fi
 echo "============================================================"
 echo

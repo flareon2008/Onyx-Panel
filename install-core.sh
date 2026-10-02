@@ -8,7 +8,7 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL=/dev/null
 
-VERSION="1.8.34"
+VERSION="1.8.35"
 BASE="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="/root/tproxy-server"
 SITE_INPUT="/opt/tproxy-site"
@@ -143,7 +143,7 @@ on_error() {
 }
 trap on_error ERR
 
-echo "Configuring Onyx Panel 1.8.34..."
+echo "Configuring Onyx Panel 1.8.35..."
 
 [[ $EUID -eq 0 ]] || die "Run this installer as root."
 [[ "$(uname -m)" == "x86_64" ]] || die "x86_64 is required."
@@ -630,7 +630,7 @@ if [[ "$CADDY_MODE" == "owner" ]]; then
 else
     printf '%s\n' 'ONYX_PANEL_V2_CADDY_SHARED' > /etc/onyx-panel/caddy-owned
 fi
-printf '%s\n' '1.8.34' > /etc/onyx-panel/version
+printf '%s\n' '1.8.35' > /etc/onyx-panel/version
 chmod 0600 /etc/onyx-panel/primary-secret
 chmod 0600 /etc/onyx-panel/caddy-owned
 chmod 0600 /etc/onyx-panel/version
