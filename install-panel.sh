@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.6..."
+    echo "Updating Onyx Panel 1.8.7..."
 else
-    echo "Configuring Onyx Panel 1.8.6..."
+    echo "Configuring Onyx Panel 1.8.7..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2452,7 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.6","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.7","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -3446,7 +3446,6 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
                 print("telegram save failed:",type(exc).__name__,file=sys.stderr,flush=True)
                 self.send_json({"ok":False,"message":"Не удалось связаться с Telegram. Проверьте токен и сеть."},503); return
         if path==PANEL_PATH+"/totp-setup":
-            import base64
             with STATE_LOCK:
                 d=load()
                 secret=onyx_totp.generate_secret()
@@ -3638,7 +3637,7 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
                 imp_fail("Архив повреждён или это не резервная копия панели."); return
             if len(members)>200:
                 imp_fail("В архиве слишком много файлов."); return
-            allow={"panel","onyx-panel","onyx-panel-xray"}
+            allow={"panel","onyx-panel","onyx-xray"}
             restore={}; total=0; meta_ok=False
             try:
                 for m in members:
@@ -3681,18 +3680,7 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
                 backup_path="/var/lib/onyx-panel/import-backup-%s.tar.gz"%stamp
                 with open(backup_path,"wb") as f: f.write(build_backup_tar())
                 os.chmod(backup_path,0o600)
-                dest_map={
-                    "panel/data.json":("/var/lib/onyx-panel/data.json",0o600),
-                    "panel/site-draft.html":("/var/lib/onyx-panel/site-draft.html",0o600),
-                    "panel/custom-presets.json":("/var/lib/onyx-panel/custom-presets.json",0o600),
-                    "panel/location.json":("/var/lib/onyx-panel/location.json",0o600),
-                    "panel/api.key":("/var/lib/onyx-panel/api.key",0o600),
-                    "onyx-panel/users.json":("/etc/onyx-panel/users.json",0o600),
-                    "onyx-panel/mtproxy-secrets":("/etc/onyx-panel/mtproxy-secrets",0o600),
-                    "onyx-panel/mtproto-host":("/etc/onyx-panel/mtproto-host",0o600),
-                    "onyx-panel/manifest":("/etc/onyx-panel/manifest",0o600),
-                    "onyx-panel/xray-path":("/etc/onyx-panel/xray-path",0o600),
-                    "onyx-xray/config.json":("/etc/onyx-panel-xray/config.json",0o640)}
+                dest_map={arc:(phys,0o640 if arc=="onyx-xray/config.json" else 0o600) for arc,phys,_ in BACKUP_FILES}
                 for arc,data in restore.items():
                     if arc.startswith("onyx-panel/awg/"):
                         os.makedirs("/etc/onyx-panel/awg",exist_ok=True)
@@ -4188,7 +4176,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.6
+Description=Onyx Panel 1.8.7
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4744,9 +4732,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.6 UPDATED"
+echo "          Onyx Panel 1.8.7 UPDATED"
 else
-echo "         Onyx Panel 1.8.6 IS READY"
+echo "         Onyx Panel 1.8.7 IS READY"
 fi
 echo "============================================================"
 echo
