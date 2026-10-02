@@ -209,9 +209,11 @@ def start(component, tag):
     else:
         if not re.fullmatch(r"v\d+(?:\.\d+){1,3}", str(tag)):
             raise ValueError("Некорректная версия.")
-        info = catalog()
-        if tag not in info["catalog"].get(component, []):
-            raise ValueError("Эта версия отсутствует среди опубликованных релизов.")
+        # Validate against the saved catalog only: the install POST must stay
+        # instant (a stale catalog is refreshed by «Проверить обновление»).
+        saved = read_state(STATUS).get("catalog", {}).get(component, []) or []
+        if str(tag) not in saved:
+            raise ValueError("Версия не найдена в загруженном списке — нажмите «Проверить обновление» и попробуйте снова.")
     state = read_state(STATUS)
     if state.get("phase") in ("queued", "running"):
         raise ValueError("Другая операция с компонентами уже выполняется.")
@@ -301,9 +303,14 @@ def _install(component, tag, directory):
         if _run(["readelf", "-h", str(candidate)], timeout=10).returncode:
             raise RuntimeError("Загруженный файл не является исполняемым Linux-бинарником.")
         if component == "xray":
-            test = _run([str(candidate), "run", "-test", "-config", "/etc/onyx-panel-xray/config.json"], timeout=20)
+            # The candidate runs from a temp dir — point it at the production
+            # asset location so geoip:/geosite: rules resolve during the test.
+            env = {**os.environ, "XRAY_LOCATION_ASSET": str(binary.parent)}
+            test = _run([str(candidate), "run", "-test", "-config", "/etc/onyx-panel-xray/config.json"],
+                        timeout=20, env=env)
             if test.returncode:
-                raise RuntimeError("Выбранная версия Xray не принимает текущую конфигурацию.")
+                tail = ((test.stderr or "") + " " + (test.stdout or "")).strip()[-280:]
+                raise RuntimeError("Выбранная версия Xray не принимает текущую конфигурацию. " + tail)
             active = [spec["service"]] if _run(["systemctl", "is-active", "--quiet", spec["service"]]).returncode == 0 else []
         else:
             test = _run([str(candidate), "--help"], timeout=10)
