@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="onyx-logo.png" width="140" alt="Onyx Panel">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="onyx-panel-white.svg">
+    <img src="onyx-panel-graphite.svg" width="340" alt="Onyx Panel">
+  </picture>
 </p>
-
-<h1 align="center">Onyx Panel</h1>
 
 <p align="center"><b>Панель управления VPN на своём VPS.</b><br>
 VLESS XHTTP · Hysteria2 · AmneziaWG 2.0/3.1 · MTProto · Telegram Web Proxy · OpenFlux · Каскады панелей · Маршрутизация</p>
