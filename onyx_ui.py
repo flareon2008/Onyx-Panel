@@ -345,12 +345,14 @@ overlay.innerHTML='<div class="move-card" id="onyxCompCard"><div class="move-rin
 document.body.append(overlay);
 const card=overlay.querySelector('#onyxCompCard'),ringText=overlay.querySelector('#onyxCompRingText'),title=overlay.querySelector('#onyxCompTitle'),text=overlay.querySelector('#onyxCompText'),actions=overlay.querySelector('#onyxCompActions'),goBtn=overlay.querySelector('#onyxCompGo'),cancelBtn=overlay.querySelector('#onyxCompCancel'),closeBtn=overlay.querySelector('#onyxCompClose');
 let resolveActions=null;
-function show(state,t,m){card.classList.remove('spin','upd-done','upd-err');actions.hidden=true;closeBtn.hidden=true;title.textContent=t;text.textContent=m||'';if(state==='running')card.classList.add('spin');overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'))}
+function show(state,t,m){card.classList.remove('spin','time','upd-done','upd-err');actions.hidden=true;closeBtn.hidden=true;ringText.textContent='↑';title.textContent=t;text.textContent=m||'';if(state==='running')card.classList.add('spin','time');if(state==='err'){card.classList.add('upd-err');ringText.textContent='!';closeBtn.hidden=false}overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'))}
 function hide(){overlay.classList.remove('show');setTimeout(()=>{overlay.hidden=true},260);resolveActions=null}
-function confirm(label,target){card.classList.remove('spin','upd-done','upd-err');ringText.textContent='↑';title.textContent='Обновить '+label+'?';text.textContent='Версия '+target+' установится поверх текущей. При ошибке — автоматический откат.';actions.hidden=false;overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'));return new Promise(res=>{resolveActions=res})}
+function confirm(label,target){card.classList.remove('spin','time','upd-done','upd-err');ringText.textContent='↑';title.textContent='Обновить '+label+'?';text.textContent='Версия '+target+' установится поверх текущей. При ошибке — автоматический откат.';actions.hidden=false;overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'));return new Promise(res=>{resolveActions=res})}
 goBtn.addEventListener('click',()=>{if(resolveActions){const r=resolveActions;resolveActions=null;r(true)}});
 cancelBtn.addEventListener('click',()=>{if(resolveActions){const r=resolveActions;resolveActions=null;r(false);hide()}});
-async function api(url,body){const r=await fetch(url,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams(body),signal:window.AbortSignal?AbortSignal.timeout(10000):undefined});let j;try{j=await r.json()}catch(e){throw new Error('Панель не отвечает')}if(!r.ok)throw new Error(j.message||'Не выполнено');return j}
+async function api(url,body,timeout){const r=await fetch(url,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams(body),signal:window.AbortSignal?AbortSignal.timeout(timeout||10000):undefined});let j;try{j=await r.json()}catch(e){throw new Error('Панель не отвечает')}if(!r.ok)throw new Error(j.message||'Не выполнено');return j}
+// Статус читается GET-ом: у маршрута нет POST-обработчика, POST всегда отвечал 404.
+async function getStatus(){const r=await fetch(PATH+'/component-status',{cache:'no-store',signal:window.AbortSignal?AbortSignal.timeout(10000):undefined});if(!r.ok)throw new Error('status '+r.status);return r.json()}
 const LABELS={xray:'Xray',openflux:'OpenFlux',awg:'AmneziaWG',mtproto:'MTProto'};
 window.ONYXCompModal={async install(component,target){
  if(!target)return;
@@ -360,17 +362,18 @@ window.ONYXCompModal={async install(component,target){
  show('running',label,'Скачиваем релиз и перезапускаем службу…');
  const started=Date.now();let misses=0;
  try{
-  try{await api(PATH+'/component-install',{csrf:CSRF,component,target})}
+  try{await api(PATH+'/component-install',{csrf:CSRF,component,target},30000)}
   catch(e){if(!String(e.message).includes('уже выполняется'))throw e}
   while(Date.now()-started<30*60*1000){
-   await new Promise(r=>setTimeout(r,3000));
-   ringText.textContent=Math.floor((Date.now()-started)/1000)+' с';
+   await new Promise(r=>setTimeout(r,2500));
+   const s=Math.floor((Date.now()-started)/1000);
+   ringText.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
    let st;
-   try{st=await api(PATH+'/component-status',{csrf:CSRF});misses=0}
-   catch(e){misses++;text.textContent=misses<5?'Связь прервалась — повторяем опрос…':'Связь с панелью кратко прерывается на время перезапуска службы — ждём восстановления… ('+misses+')';continue}
-   if(st.phase==='done'){card.classList.remove('spin');card.classList.add('upd-done');ringText.textContent='✓';title.textContent=label+' обновлён';text.textContent=st.message||'Готово.';setTimeout(hide,2600);return}
-   if(st.phase==='failed'){card.classList.remove('spin');card.classList.add('upd-err');ringText.textContent='!';title.textContent=label+' — не обновлён';text.textContent=st.message||'Не удалось.';closeBtn.hidden=false;return}
-   text.textContent=st.message||'Устанавливаю…';
+   try{st=await getStatus();misses=0}
+   catch(e){misses++;text.textContent=misses<3?'Связь пропала — повторяем опрос…':'Связь с панелью потеряна, ждём восстановления ('+misses+')…';continue}
+   if(st.phase==='done'){card.classList.remove('spin','time');card.classList.add('upd-done');ringText.textContent='✓';title.textContent=label+' обновлён';text.textContent=st.message||'Готово.';try{window.dispatchEvent(new CustomEvent('onyx-components-changed'))}catch(e){};setTimeout(hide,2600);return}
+   if(st.phase==='failed'){card.classList.remove('spin','time');card.classList.add('upd-err');ringText.textContent='!';title.textContent=label+' — не обновлён';text.textContent=st.message||'Не удалось.';closeBtn.hidden=false;try{window.dispatchEvent(new CustomEvent('onyx-components-changed'))}catch(e){};return}
+   text.textContent=st.message||'Устанавливаем…';
   }
   show('err',label,'Обновление идёт дольше 30 минут — установка продолжается в фоне.');
  }catch(e){show('err',label,e.message)}
@@ -1122,7 +1125,7 @@ input[type=date]{color-scheme:dark}
 .move-ring.spin svg{animation:updspin 1.1s linear infinite}
 @keyframes updspin{from{transform:rotate(-90deg)}to{transform:rotate(270deg)}}
 .move-ring.spin .move-ring-fg{stroke-dasharray:64 212.5;stroke-dashoffset:0;transition:none}.move-card.spin .move-ring svg{animation:updspin 1.1s linear infinite}.move-card.spin .move-ring-fg{stroke-dasharray:64 212.5;stroke-dashoffset:0;transition:none}
-.move-ring.time b{font-size:19px;letter-spacing:.04em}
+.move-ring.time b,.move-card.time .move-ring b{font-size:19px;letter-spacing:.04em}
 .move-card.upd-done .move-ring b{color:var(--green)}
 .move-card.upd-done .move-ring-fg{stroke:var(--green)}
 .move-card.upd-err .move-ring b{color:var(--red)}
@@ -1421,7 +1424,7 @@ document.getElementById('updateNoticeLater').addEventListener('click',()=>update
 document.getElementById('refreshDashboard').addEventListener('click',refresh);root.addEventListener('click',async e=>{{const r=e.target.closest('[data-range]');if(r){{range=Number(r.dataset.range);refresh();return}}const b=e.target.closest('#checkUpdate,#startUpdate');if(!b||busy)return;const start=b.id==='startUpdate',target=document.getElementById('panelRelease').value;if(start&&!(await onyxConfirm('Установить версию '+target+'? Будет создана резервная копия. Панель и подключения могут временно прерваться.',{{title:'Установка обновления',ok:'Установить'}})))return;busy=true;b.disabled=true;try{{const body={{csrf:'{esc(csrf)}'}};if(start)body.target=target;const r=await fetch('{esc(path)}/'+(start?'update-start':'update-check'),{{method:'POST',body:new URLSearchParams(body)}});if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');const d=await r.json();if(!r.ok)throw new Error(d.message||'Ошибка обновления');updateView(d)}}catch(err){{document.getElementById('updateStatus').textContent=err.message}}finally{{busy=false;b.disabled=false}}}});
 function componentView(d){{const catalog=d.catalog||{{}},current=d.current||{{}},unsuitable=d.unsuitable||{{}},running=['queued','running'].includes(d.phase);for(const name of ['xray','openflux']){{const select=document.getElementById(name+'Release'),button=document.querySelector('[data-component-install="'+name+'"]');let versions=(catalog[name]||[]).slice();const bad=(name==='openflux'&&(unsuitable[name]||[]))||[];bad.forEach(t=>{{if(!versions.includes(t))versions.push(t)}});if(bad.length)versions.sort((a,b)=>{{const p=s=>s.replace(/^v/,'').split('.').map(Number),x=p(a),y=p(b);for(let i=0;i<4;i++){{if((x[i]||0)!==(y[i]||0))return (y[i]||0)>(x[i]||0)?1:-1}}return 0}});const installed=String(current[name]||'').replace(/^v/,''),old=select.value;if(versions.length){{select.innerHTML=versions.map(v=>'<option value="'+v+'">'+v.replace(/^v/,'')+(v.replace(/^v/,'')===installed?' · установлена':(bad.includes(v)?' · нет сборки для Linux':''))+'</option>').join('');if(versions.includes(old))select.value=old;else if(versions.map(v=>v.replace(/^v/,'')).includes(installed))select.value='v'+installed;else{{const fit=versions.find(v=>!bad.includes(v));select.value=fit||versions[0]||''}}}}select.disabled=running||!versions.length;button.disabled=running||!versions.length||bad.includes(select.value);document.getElementById(name+'Current').textContent='Установлено: '+(current[name]||'неизвестно')}}componentStatus.textContent=d.message||(d.checked?'Версии компонентов загружены.':'Нажмите «Проверить обновление».')}}
 document.getElementById('checkComponents').addEventListener('click',async e=>{{const b=e.currentTarget;b.disabled=true;try{{const r=await fetch('{esc(path)}/component-check',{{method:'POST',body:new URLSearchParams({{csrf:'{esc(csrf)}'}})}}),d=await r.json();if(!r.ok)throw new Error(d.message||'Ошибка загрузки версий');componentView(d)}}catch(err){{document.getElementById('componentStatus').textContent=err.message}}finally{{b.disabled=false}}}});document.querySelectorAll('[data-component-install]').forEach(button=>button.addEventListener('click',()=>{{const component=button.dataset.componentInstall,target=document.getElementById(component+'Release').value;window.ONYXCompModal&&ONYXCompModal.install(component,target)}}));
-setInterval(refresh,5000);setInterval(updateClock,1000);setInterval(()=>fetch('{esc(path)}/component-status',{{cache:'no-store'}}).then(r=>r.ok?r.json():null).then(d=>d&&componentView(d)).catch(()=>{{}}),5000);document.addEventListener('visibilitychange',()=>{{if(!document.hidden)refresh()}});fetch('{esc(path)}/update-status',{{cache:'no-store'}}).then(r=>r.ok&&!r.redirected?r.json():null).then(d=>{{if(d){{updateView(d);automaticUpdateCheck(d)}}}}).catch(()=>automaticUpdateCheck(null));fetch('{esc(path)}/component-status',{{cache:'no-store'}}).then(r=>r.ok?r.json():null).then(d=>d&&componentView(d)).catch(()=>{{}});
+setInterval(refresh,5000);setInterval(updateClock,1000);const pullComponents=()=>fetch('{esc(path)}/component-status',{{cache:'no-store'}}).then(r=>r.ok?r.json():null).then(d=>d&&componentView(d)).catch(()=>{{}});setInterval(pullComponents,5000);window.addEventListener('onyx-components-changed',pullComponents);document.addEventListener('visibilitychange',()=>{{if(!document.hidden)refresh()}});fetch('{esc(path)}/update-status',{{cache:'no-store'}}).then(r=>r.ok&&!r.redirected?r.json():null).then(d=>{{if(d){{updateView(d);automaticUpdateCheck(d)}}}}).catch(()=>automaticUpdateCheck(null));pullComponents();
 </script>'''
 
 
@@ -1874,5 +1877,5 @@ panelButton.addEventListener('click',()=>{{const target=panelSelect.value;if(!ta
 updGo.addEventListener('click',async()=>{{if(updGo.dataset.mode==='close'){{updHide();updActive=false;loadPanel(true);return}}const target=panelSelect.value;updGo.disabled=true;try{{panelView(await request('update-start',{{target}},panelStatus));updShow('running');updWatch()}}catch(e){{updShow('failed',null,e.message)}}finally{{updGo.disabled=false}}}});
 updCancel.addEventListener('click',()=>{{updHide();updActive=false}});
 document.querySelectorAll('[data-component-install]').forEach(button=>button.addEventListener('click',()=>{{const component=button.dataset.componentInstall,target=document.getElementById(component+'Release').value;window.ONYXCompModal&&ONYXCompModal.install(component,target)}}));
-loadPanel().then(()=>{{if(panelBusy&&!updActive){{updActive=true;updShow('running');updWatch()}}}});loadComponents();setInterval(()=>{{loadPanel();loadComponents()}},5000);
+loadPanel().then(()=>{{if(panelBusy&&!updActive){{updActive=true;updShow('running');updWatch()}}}});loadComponents();setInterval(()=>{{loadPanel();loadComponents()}},5000);window.addEventListener('onyx-components-changed',()=>{{loadComponents()}});
 </script>'''

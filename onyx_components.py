@@ -80,6 +80,17 @@ def _current(component):
     binary = SPECS[component]["binary"]
     if not binary.is_file():
         return "не установлен"
+    if component == "openflux":
+        # OpenFlux has no version flag: probing the binary burns the 5 s
+        # subprocess timeout on every status poll. The install-time stamp is
+        # authoritative, so read it first and keep the binary probe as a
+        # fallback only.
+        try:
+            stamp = _version_file(component).read_text(encoding="ascii").strip()
+            if re.fullmatch(r"v?\d+(?:\.\d+){1,3}", stamp):
+                return stamp.lstrip("v")
+        except OSError:
+            pass
     commands = [[str(binary), "version"], [str(binary), "--version"], [str(binary), "-version"]]
     for command in commands:
         try:
@@ -91,8 +102,8 @@ def _current(component):
             match = re.search(r"v?(\d+(?:\.\d+){1,3})", " ".join(value[:2]))
             if match:
                 return match.group(1)
-    # OpenFlux has no version flag: fall back to the install-time stamp, then
-    # to the tag recorded by the last successful component install.
+    # No version flag and no stamp: fall back to the tag recorded by the
+    # last successful component install.
     fallbacks = []
     try:
         fallbacks.append(_version_file(component).read_text(encoding="ascii").strip())
@@ -225,7 +236,23 @@ def start(component, tag):
         state.update(phase="failed", message="Не удалось запустить обновление компонента.")
         atomic_json(STATUS, state)
         raise ValueError(state["message"])
-    return state
+    # --no-block returns before the unit runs anything. If the job never
+    # leaves "queued" (broken unit, busy machine), the UI would spin forever
+    # and both install buttons would stay disabled, so wait for the pickup
+    # and fail loudly when it does not come.
+    deadline = time.time() + 6
+    while time.time() < deadline:
+        time.sleep(0.4)
+        state = read_state(STATUS)
+        phase = state.get("phase")
+        if phase == "failed":
+            raise ValueError(state.get("message") or "Не удалось запустить обновление компонента.")
+        if phase in ("running", "done"):
+            return state
+    state.update(phase="failed",
+                 message="Служба обновления компонентов не запустилась. Проверьте unit onyx-panel-component-update.service.")
+    atomic_json(STATUS, state)
+    raise ValueError(state["message"])
 
 
 def _download(url, destination):
@@ -283,13 +310,24 @@ def _active_openflux_units():
             if line.split() and re.fullmatch(r"onyx-panel-openflux\.service", line.split()[0])]
 
 
-def _install(component, tag, directory):
+def _install(component, tag, directory, progress=None):
     spec = SPECS[component]
     binary = spec["binary"]
     candidate = directory / "candidate"
     download = directory / "download"
 
+    def report(message):
+        # Milestone updates land in status.json so the install modal shows
+        # the stage in progress instead of a static "installing" line.
+        if progress is None:
+            return
+        try:
+            progress(str(message)[:300])
+        except Exception:
+            pass
+
     if spec.get("mode") == "asset":
+        report("Скачиваем релиз " + tag + "…")
         _download(spec["asset"].format(tag=tag), download)
         if component == "xray":
             result = subprocess.run(["unzip", "-q", str(download), "xray", "-d", str(directory)],
@@ -305,6 +343,7 @@ def _install(component, tag, directory):
         if component == "xray":
             # The candidate runs from a temp dir — point it at the production
             # asset location so geoip:/geosite: rules resolve during the test.
+            report("Проверяем совместимость с текущей конфигурацией…")
             env = {**os.environ, "XRAY_LOCATION_ASSET": str(binary.parent)}
             test = _run([str(candidate), "run", "-test", "-config", "/etc/onyx-panel-xray/config.json"],
                         timeout=20, env=env)
@@ -313,12 +352,14 @@ def _install(component, tag, directory):
                 raise RuntimeError("Выбранная версия Xray не принимает текущую конфигурацию. " + tail)
             active = [spec["service"]] if _run(["systemctl", "is-active", "--quiet", spec["service"]]).returncode == 0 else []
         else:
+            report("Проверяем бинарник…")
             test = _run([str(candidate), "--help"], timeout=10)
             if test.returncode not in (0, 1, 2):
                 raise RuntimeError("Выбранный бинарник OpenFlux не запускается.")
             active = _active_openflux_units()
     elif spec.get("mode") == "source":
         go = _find_go()
+        report("Скачиваем исходники AmneziaWG…")
         archive = directory / "awg-src.tar.gz"
         result = _run(["curl", "-fsSL", "--retry", "3", "--retry-all-errors", "--connect-timeout", "20",
                        "--max-time", "300", "-o", str(archive),
@@ -329,18 +370,21 @@ def _install(component, tag, directory):
         srcdir = directory / "src"
         _safe_extract_sources(archive, srcdir, "amneziawg-go-" + tag[1:])
         env = {**os.environ, "PATH": str(go.parent) + ":" + os.environ.get("PATH", "")}
+        report("Собираем из исходников — это занимает несколько минут…")
         build = _run(["make", "-C", str(srcdir)], timeout=900, env=env)
         if build.returncode or not (srcdir / "amneziawg-go").is_file():
             tail = (build.stderr or build.stdout or "")[-400:]
             raise RuntimeError("Сборка AmneziaWG не удалась. " + tail)
         shutil.copy2(srcdir / "amneziawg-go", candidate)
         os.chmod(candidate, 0o755)
+        report("Проверяем собранный бинарник…")
         if _run(["readelf", "-h", str(candidate)], timeout=10).returncode:
             raise RuntimeError("Собранный файл не является исполняемым Linux-бинарником.")
         if _run([str(candidate), "--version"], timeout=10).returncode not in (0, 1):
             raise RuntimeError("Собранный бинарник AmneziaWG не запускается.")
         active = _active_awg_units()
     else:
+        report("Пересобираем MTProto из исходников панели…")
         bundle = PACKAGE_DIR / "assets" / "tproxy-server-52a5feb.tar.gz"
         if not bundle.is_file():
             raise RuntimeError("Локальный пакет панели не найден (/opt/onyx-panel-package).")
@@ -356,23 +400,29 @@ def _install(component, tag, directory):
             raise RuntimeError("Пересборка MTProto не удалась. " + tail)
         if not binary.is_file():
             raise RuntimeError("Бинарник MTProxy не появился после сборки.")
+        report("Перезапускаем MTProto…")
         restart = _run(["systemctl", "restart", "mtproxy.service"], timeout=60)
         if restart.returncode or _run(["systemctl", "is-active", "--quiet", "mtproxy.service"], timeout=10).returncode:
             raise RuntimeError("mtproxy.service не запустился после пересборки.")
         return
 
     backup = directory / "previous"
+    report("Создаём резервную копию прежней версии…")
     shutil.copy2(binary, backup)
     try:
+        report("Останавливаем службу…")
         for service in active:
             _run(["systemctl", "stop", service], timeout=30)
+        report("Заменяем бинарник новой версией…")
         shutil.copy2(candidate, binary)
         os.chmod(binary, 0o755)
+        report("Перезапускаем службу и проверяем её…")
         for service in active:
             result = _run(["systemctl", "restart", service], timeout=40)
             if result.returncode or _run(["systemctl", "is-active", "--quiet", service], timeout=10).returncode:
                 raise RuntimeError("Служба не запустилась с выбранной версией.")
     except Exception:
+        report("Новая версия не прошла проверку — откатываемся…")
         shutil.copy2(backup, binary)
         os.chmod(binary, 0o755)
         for service in active:
@@ -396,11 +446,17 @@ def run():
     component, tag = state.get("component"), state.get("target")
     if state.get("phase") != "queued" or component not in SPECS:
         raise SystemExit("No queued component update")
-    state.update(phase="running", message=f"Устанавливается {component} {tag}. Создана резервная копия.")
+    state.update(phase="running", message=f"Устанавливается {component} {tag}…")
     atomic_json(STATUS, state)
+
+    def progress(message):
+        live = read_state(STATUS)
+        live.update(phase="running", message=message)
+        atomic_json(STATUS, live)
+
     try:
         with tempfile.TemporaryDirectory(prefix="onyx-component-") as directory:
-            _install(component, tag, Path(directory))
+            _install(component, tag, Path(directory), progress)
         state.update(phase="done", message=f"{component} {tag} установлен. Проверка службы пройдена.")
         try:
             stamp = _version_file(component)
