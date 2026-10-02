@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.5..."
+    echo "Updating Onyx Panel 1.8.6..."
 else
-    echo "Configuring Onyx Panel 1.8.5..."
+    echo "Configuring Onyx Panel 1.8.6..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2452,7 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.5","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.6","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2831,7 +2831,7 @@ const totpSetupBtn=document.getElementById("totpSetupBtn"),totpDialog=document.g
 if(totpSetupBtn){const s=document.getElementById("totpDialogStatus"),codeHidden=document.getElementById("totpCode");
 const cells=Array.from(document.querySelectorAll("#totpCells input"));
 const syncCode=()=>{codeHidden.value=cells.map(c=>c.value).join("")};
-cells.forEach((cell,i)=>{cell.addEventListener("input",()=>{cell.value=cell.value.replace(/\D/g,"").slice(0,1);if(cell.value&&i<cells.length-1)cells[i+1].focus();syncCode()});cell.addEventListener("keydown",e=>{if(e.key==="Backspace"&&!cell.value&&i>0){cells[i-1].focus();cells[i-1].value="";syncCode();e.preventDefault()}});cell.addEventListener("paste",e=>{const digits=(e.clipboardData||window.clipboardData).getData("text").replace(/\D/g,"");if(!digits)return;e.preventDefault();digits.split("").slice(0,cells.length).forEach((d,j)=>cells[j].value=d);cells[Math.min(digits.length,cells.length-1)].focus();syncCode()})});
+cells.forEach((cell,i)=>{cell.addEventListener("input",()=>{cell.value=cell.value.replace(/\\D/g,"").slice(0,1);if(cell.value&&i<cells.length-1)cells[i+1].focus();syncCode()});cell.addEventListener("keydown",e=>{if(e.key==="Backspace"&&!cell.value&&i>0){cells[i-1].focus();cells[i-1].value="";syncCode();e.preventDefault()}});cell.addEventListener("paste",e=>{const digits=(e.clipboardData||window.clipboardData).getData("text").replace(/\\D/g,"");if(!digits)return;e.preventDefault();digits.split("").slice(0,cells.length).forEach((d,j)=>cells[j].value=d);cells[Math.min(digits.length,cells.length-1)].focus();syncCode()})});
 totpSetupBtn.addEventListener("click",async()=>{s.className="panel-setting-status";s.textContent="Готовлю секрет…";
 try{const res=await post(PATH+"/totp-setup",{csrf:CSRF});
 document.getElementById("totpSecret").textContent=res.secret||"";
@@ -4188,7 +4188,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.5
+Description=Onyx Panel 1.8.6
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4744,9 +4744,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.5 UPDATED"
+echo "          Onyx Panel 1.8.6 UPDATED"
 else
-echo "         Onyx Panel 1.8.5 IS READY"
+echo "         Onyx Panel 1.8.6 IS READY"
 fi
 echo "============================================================"
 echo
