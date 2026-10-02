@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.7..."
+    echo "Updating Onyx Panel 1.8.8..."
 else
-    echo "Configuring Onyx Panel 1.8.7..."
+    echo "Configuring Onyx Panel 1.8.8..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2452,7 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.7","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.8","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -3696,6 +3696,19 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
                 print("import apply failed:",type(exc).__name__,file=sys.stderr,flush=True)
                 imp_fail("Не удалось записать файлы. Проверьте диск и повторите."); return
             xray="onyx-xray/config.json" in restore
+            if "onyx-panel/xray-path" in restore:
+                def _sync_caddy_vless():
+                    try:
+                        new_path=open("/etc/onyx-panel/xray-path",encoding="utf-8").read().strip()
+                        s=open("/etc/caddy/Caddyfile",encoding="utf-8").read()
+                        s2,n=re.subn(r"/vless-[a-f0-9]{24}",new_path,s)
+                        if n and s2!=s:
+                            open("/etc/caddy/Caddyfile","w",encoding="utf-8").write(s2)
+                            subprocess.run(["caddy","fmt","--overwrite","/etc/caddy/Caddyfile"],capture_output=True,timeout=20)
+                            subprocess.run(["systemctl","restart","caddy.service"],capture_output=True,timeout=60,start_new_session=True)
+                    except Exception:
+                        pass
+                timer=threading.Timer(1.5,_sync_caddy_vless); timer.daemon=True; timer.start()
             if xray:
                 def _restart_xray():
                     try: subprocess.run(["systemctl","restart","onyx-panel-xray.service"],capture_output=True,timeout=60)
@@ -4076,8 +4089,11 @@ def heal_caddy_route():
     route="    handle "+PANEL_PATH+"/* {\n        reverse_proxy 127.0.0.1:8090\n    }\n"
     blocks=[(m.start(),m.end(),m.group(1)) for m in re.finditer(
         r"(?m)^[ \t]*handle\s+(/\S+/\*)\s*\{\s*\n[ \t]*reverse_proxy 127\.0\.0\.1:8090[ \t]*\n[ \t]*\}[ \t]*\n?",s)]
-    stale=[b for b in blocks if b[2] not in known]
-    has_current=any(b[2]==PANEL_PATH+"/*" for b in blocks)
+    stale=[]; seen_current=False
+    for b in blocks:
+        if b[2] not in known or (b[2]==PANEL_PATH+"/*" and seen_current): stale.append(b)
+        elif b[2]==PANEL_PATH+"/*": seen_current=True
+    has_current=seen_current
     if not stale and has_current: return
     for start,end,_ in sorted(stale,key=lambda b:-b[0]):
         s=s[:start]+s[end:]
@@ -4176,7 +4192,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.7
+Description=Onyx Panel 1.8.8
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4732,9 +4748,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.7 UPDATED"
+echo "          Onyx Panel 1.8.8 UPDATED"
 else
-echo "         Onyx Panel 1.8.7 IS READY"
+echo "         Onyx Panel 1.8.8 IS READY"
 fi
 echo "============================================================"
 echo

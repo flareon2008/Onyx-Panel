@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.8.7'
+VERSION = '1.8.8'
 
 
 def login_version():
