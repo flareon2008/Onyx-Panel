@@ -15,7 +15,7 @@ REPOSITORY="${ONYX_UPDATE_REPOSITORY:-https://github.com/xCodeOn/Onyx-Panel.git}
 REQUESTED_REF="${ONYX_PANEL_REF:-}"
 RELEASE_REF="$REQUESTED_REF"
 LOCAL_SOURCE=""
-LOCAL_VERSION="1.5.1"
+LOCAL_VERSION="1.7.1"
 # `--local` is accepted for compatibility and behaves the same as the default.
 LOCAL_SOURCE="$(cd "$(dirname "$0")" && pwd)"
 # Invoked as the installed /usr/local/sbin/onyx-panel-update, the script's own
@@ -23,20 +23,31 @@ LOCAL_SOURCE="$(cd "$(dirname "$0")" && pwd)"
 if [[ ! -s "$LOCAL_SOURCE/install-final.sh" && -d /opt/onyx-panel-package ]]; then
     LOCAL_SOURCE="/opt/onyx-panel-package"
 fi
-for file in install-final.sh install-panel.sh install-core.sh uninstall-onyx-panel.sh repair-landing-pages.sh onyx-logo.png onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
-    [[ -s "$LOCAL_SOURCE/$file" ]] || { echo "Incomplete local archive: $file is missing." >&2; exit 1; }
-done
-[[ -s "$LOCAL_SOURCE/assets/OpenFlux-linux-amd64" || -s "$LOCAL_SOURCE/OpenFlux-linux-amd64" ]] || {
-    echo "Incomplete local archive: OpenFlux-linux-amd64 is missing." >&2; exit 1;
-}
-for asset in amneziawg-go-linux-amd64 awg-linux-amd64 awg-quick-linux-amd64; do
-    [[ -s "$LOCAL_SOURCE/assets/$asset" ]] || { echo "Incomplete local archive: assets/$asset is missing." >&2; exit 1; }
-done
-for font in manrope-cyrillic-wght-normal.woff2 manrope-latin-wght-normal.woff2 jetbrains-mono-cyrillic-wght-normal.woff2 jetbrains-mono-latin-wght-normal.woff2; do
-    [[ -s "$LOCAL_SOURCE/fonts/$font" ]] || { echo "Incomplete local archive: fonts/$font is missing." >&2; exit 1; }
-done
-[[ -s "$LOCAL_SOURCE/onyx-panel/flags.tar.gz" ]] || {
-    echo "Incomplete local archive: onyx-panel/flags.tar.gz is missing." >&2; exit 1;
+# The local package is the offline fallback. It must be complete only when the
+# repository cannot provide the files; a reachable repository is the source of
+# truth, and a stale local package must not block the update (the successful
+# install refreshes the package copy at the end of this script).
+require_local_archive() {
+    local gap=""
+    for file in install-final.sh install-panel.sh install-core.sh uninstall-onyx-panel.sh repair-landing-pages.sh onyx-logo.png onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
+        [[ -s "$LOCAL_SOURCE/$file" ]] || gap="$gap $file"
+    done
+    [[ -s "$LOCAL_SOURCE/assets/OpenFlux-linux-amd64" || -s "$LOCAL_SOURCE/OpenFlux-linux-amd64" ]] || gap="$gap assets/OpenFlux-linux-amd64"
+    for asset in amneziawg-go-linux-amd64 awg-linux-amd64 awg-quick-linux-amd64; do
+        [[ -s "$LOCAL_SOURCE/assets/$asset" ]] || gap="$gap assets/$asset"
+    done
+    for font in manrope-cyrillic-wght-normal.woff2 manrope-latin-wght-normal.woff2 jetbrains-mono-cyrillic-wght-normal.woff2 jetbrains-mono-latin-wght-normal.woff2; do
+        [[ -s "$LOCAL_SOURCE/fonts/$font" ]] || gap="$gap fonts/$font"
+    done
+    [[ -s "$LOCAL_SOURCE/onyx-panel/flags.tar.gz" ]] || gap="$gap onyx-panel/flags.tar.gz"
+    [[ -n "$gap" ]] || return 0
+    if [[ -n "$REPOSITORY" && "$REMOTE_OK" == 1 ]]; then
+        echo "Note: the local package is incomplete (${gap# } missing) — files will be taken from the repository." >&2
+        return 0
+    fi
+    echo "Incomplete local archive:${gap} is missing." >&2
+    echo "The repository is unreachable, so the local package must be complete." >&2
+    exit 1
 }
 SERVICE="/etc/systemd/system/onyx-panel.service"
 LEGACY_SERVICE="/etc/systemd/system/tproxy-panel.service"
@@ -50,7 +61,7 @@ exec 9>/run/lock/onyx-panel.lock
 flock -n 9 || die "Another Onyx Panel install, update or removal is already running."
 
 echo "============================================================"
-echo "     Onyx Panel 1.5.1 — SAFE UPDATE"
+echo "     Onyx Panel 1.7.1 — SAFE UPDATE"
 echo "============================================================"
 echo "Users, administrator password, panel URL and site HTML will be retained."
 
@@ -298,9 +309,11 @@ echo "Preparing Onyx Panel update files..."
 if [[ -n "$REPOSITORY" && "$REMOTE_OK" == 1 ]]; then
     if ! git clone --depth 1 --branch "$RELEASE_REF" "$REPOSITORY" "$TEMP_DIR/source" 2>/dev/null; then
         echo "Clone failed — falling back to the local package."
+        require_local_archive
         cp -a "$LOCAL_SOURCE/." "$TEMP_DIR/source/"
     fi
 else
+    require_local_archive
     cp -a "$LOCAL_SOURCE/." "$TEMP_DIR/source/"
 fi
 [[ -f "$TEMP_DIR/source/install-panel.sh" ]] || die "Update package is incomplete."
@@ -397,6 +410,19 @@ UPDATE_VERSION="${RELEASE_REF#v}"
 printf '%s\n' "$UPDATE_VERSION" > /etc/onyx-panel/version
 chmod 0600 /etc/onyx-panel/caddy-owned /etc/onyx-panel/version
 UPDATE_COMMITTED=1
+
+# Refresh the private offline package so future local-fallback updates,
+# reinstalls and rollbacks use exactly the version installed right now.
+if [[ "$TEMP_DIR/source" != /opt/onyx-panel-package ]]; then
+    rm -rf /opt/onyx-panel-package.tmp
+    install -d -o root -g root -m 0700 /opt/onyx-panel-package.tmp
+    cp -a "$TEMP_DIR/source/." /opt/onyx-panel-package.tmp/
+    rm -rf /opt/onyx-panel-package.tmp/.git /opt/onyx-panel-package
+    mv /opt/onyx-panel-package.tmp /opt/onyx-panel-package
+    printf '%s\n' "$UPDATE_VERSION" > /opt/onyx-panel-package/version
+    chmod 0600 /opt/onyx-panel-package/version
+fi
+
 echo
 echo "Update completed. Open the panel at: https://${DOMAIN}${PANEL_PATH}/login"
 NODE_API_TOKEN="$(python3 - "$DOMAIN" <<'PY'
