@@ -123,6 +123,25 @@ for marker in ("Уведомления Telegram","tgForm","Автобэкап","
 assert 'data-role="admin"' in out
 assert "@@" not in out, "unreplaced script placeholder leaked into the settings page"
 assert "importPick" in out and "/import" in out, "backup import form missing"
+# full 2FA cycle: setup -> enable with a valid code -> disable
+def _post(path, fields, ck):
+    hh=FakeHandler("POST", srv.PANEL_PATH+path, dict([ck]) if ck else {})
+    fields=dict(fields); fields["csrf"]=hh.csrf()
+    body=urllib.parse.urlencode(fields).encode()
+    hh.headers["Content-Type"]="application/x-www-form-urlencoded"; hh.headers["Content-Length"]=str(len(body))
+    hh.rfile=io.BytesIO(body); hh.do_POST(); return hh
+h2s=_post("/totp-setup", {}, cka)
+d2s=h2s.resp_json()
+assert d2s["ok"] and d2s["secret"] and d2s["uri"], d2s
+h2e=_post("/totp-enable", {"code": onyx_totp.totp_at(d2s["secret"])}, cka)
+assert h2e.resp_json()["ok"] is True, h2e.output()
+assert store["totp"]["enabled"] is True
+h2w=_post("/totp-enable", {"code": "000000"}, cka)  # wrong code must be rejected
+assert h2w.resp_json()["ok"] is False
+h2d=_post("/totp-disable", {"code": onyx_totp.totp_at(d2s["secret"], timestamp=int(time.time())+31)}, cka) if False else _post("/totp-disable", {"code": onyx_totp.totp_at(d2s["secret"], timestamp=onyx_totp.time.time()+31)}, cka)
+assert h2d.resp_json()["ok"] is True, h2d.output()
+assert "totp" not in store or not store.get("totp")
+print("9b) 2FA setup/enable/disable OK")
 print("9) settings page new cards OK")
 
 h10=FakeHandler("GET", srv.PANEL_PATH+"/cascade", dict([cka])); h10.do_GET()
