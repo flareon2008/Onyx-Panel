@@ -7,7 +7,18 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.5.1'
+VERSION = '1.7.2'
+
+
+def login_version():
+    """Installed version straight from the server file; VERSION is only a
+    fallback for development machines, so the login page can never show a
+    stale hardcoded number after an update."""
+    try:
+        with open('/etc/onyx-panel/version', encoding='ascii') as handle:
+            return handle.read().strip() or VERSION
+    except OSError:
+        return VERSION
 
 
 def esc(value): return html.escape(str(value), quote=True)
@@ -76,7 +87,7 @@ dialog{padding:25px;width:min(570px,calc(100vw - 32px));max-height:90vh;max-heig
 @media(max-width:1150px){.app{grid-template-columns:192px minmax(0,1fr);padding:10px;gap:8px}main{padding:24px 18px}.brand{gap:8px}.brand b{font-size:11px}.brand img{width:36px;height:36px}.dashboard-grid{grid-template-columns:minmax(0,1.5fr) minmax(245px,1fr)}.clients-summary{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:18px}.client-stat:nth-child(3){border-right:0}.resource-grid{grid-template-columns:1fr 1fr}.graph-speeds{gap:20px}.graph-speeds b{font-size:22px}.preset-grid{grid-template-columns:1fr 1fr}.client-glance{grid-template-columns:1fr 1fr auto}.client-glance .badge{display:none}}
 @media(max-width:900px){.dashboard-grid,.two-col.equal{grid-template-columns:1fr}.overview-stats{grid-template-columns:1fr 1fr}.graph-card{margin-bottom:0}.graph-speeds b{font-size:27px}.clients-toolbar select{max-width:100%}.login-story{padding:30px}.login-story h2{font-size:34px}.signin{padding:35px 28px}}
 @media(max-width:700px){.app{display:block;height:auto;padding:8px}.sidebar{padding:14px;border-radius:16px;overflow:visible}.brand{padding:0 50px 13px 2px}.brand b{font-size:12px}.brand img{width:37px;height:37px}.brand-tools{position:absolute;right:25px;top:24px;padding:0;gap:5px}.brand-tools button{width:34px;height:34px;padding:7px}.brand-tools button span{display:none}.brand-tools .mobile-caption{display:none}.nav{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.nav a{padding:9px 4px;font-size:11px;gap:6px;justify-content:center}.nav .ico{width:15px}.side-footer{display:flex;justify-content:space-between;align-items:center;padding-top:10px}.side-footer .logout{font-size:10px;padding:4px 6px;gap:5px}.social{margin:0;padding:0;border:0;gap:14px}.social a{font-size:9px}.social .ico{width:12px}.workspace{overflow:visible}main{padding:23px 5px 35px}.page-head{align-items:flex-start;gap:12px;margin-bottom:21px}.page-head h1{font-size:30px}.page-head p{font-size:12px}.page-head>button{font-size:11px;padding:10px;max-width:145px}.eyebrow{font-size:9px}.card{padding:18px}.graph-speeds{gap:20px}.graph-speeds b{font-size:23px}.chart-wrap{height:210px}.resource{padding:15px}.resource-head b{font-size:17px}.resource-head strong{font-size:11px}.overview-stat{padding:10px 14px}.overview-stat b{font-size:24px}.client-glance{grid-template-columns:minmax(0,1fr) auto;gap:9px}.client-glance .pills{display:none}.client-glance .btn{grid-column:1/-1;justify-self:start}.clients-summary{padding:16px 0;row-gap:16px;border-radius:15px}.client-stat{padding:0 11px}.client-stat b{font-size:20px}.client-stat span{font-size:9px}.clients-toolbar{padding:12px;gap:8px}.search-field{flex-basis:100%}.clients-toolbar select{flex:1 1 100%;font-size:12px;min-width:0;width:100%;padding-right:28px}.clients-table{display:block;min-width:0}.clients-table thead{display:none}.clients-table tbody{display:grid;gap:12px;padding:12px}.clients-table tr{position:relative;display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:13px;padding:12px;gap:10px;background:var(--input)}.clients-table td{display:block;padding:0;border:0;min-width:0}.clients-table td:before{content:attr(data-label);display:block;color:var(--muted);font-size:9px;margin-bottom:4px}.clients-table .select-col{position:absolute;right:12px;top:14px;width:20px}.clients-table .client-name{grid-column:1/-1;max-width:none;padding-right:28px}.client-name strong{font-size:15px}.clients-table .state-col{position:static;grid-area:2/2;justify-self:end;align-self:center}.clients-table .state-col:before{display:none}.clients-table .activity-col{grid-area:2/1;min-height:26px;align-self:center}.clients-table .activity-col:before{display:none}.clients-table .protocol-col{max-width:none}.traffic-cell{min-width:0}.clients-table .actions-col{grid-column:1/-1;border-top:1px solid var(--line);padding-top:9px}.clients-table .actions-col:before{display:none}.row-actions{justify-content:flex-end;gap:9px}.row-actions .icon-btn{width:35px;height:33px;border:1px solid var(--line)}.clients-table tr:last-child td{border:0}.bulk-bar{padding:12px}.form-grid{grid-template-columns:1fr}.account-head{flex-wrap:wrap}.account-metrics{gap:15px}.device{flex-wrap:wrap}.preview-top{padding:12px}.preview-stage{padding:10px;height:65dvh}.preview-dialog{width:calc(100vw - 16px)}.editor-actions{align-items:stretch;flex-direction:column}.preset-grid{gap:8px}.preset{padding:13px}.preset button{padding:9px}.login-page{padding:80px 18px 30px}.login-shell{grid-template-columns:1fr;max-width:420px}.login-story{padding:25px;min-height:0;gap:20px}.login-story h2{font-size:27px}.login-story p,.login-story>small{display:none}.login-story .eyebrow{display:none}.signin{padding:28px}.login-theme{top:18px;right:18px}}
-.bell-wrap{position:relative}.bell-btn{position:relative}.bell-count{position:absolute;top:-6px;right:-7px;min-width:16px;height:16px;padding:0 4px;display:grid;place-items:center;border-radius:8px;background:var(--accent);color:var(--on-accent);font:600 9px/1 ui-monospace,monospace}.bell-menu{display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);width:380px;max-height:min(70dvh,560px)}.bell-menu[hidden]{display:none}.bell-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line);flex:0 0 auto}.bell-head b{font-size:12px}.bell-head button{padding:6px 10px;font-size:10px;background:transparent;border-color:transparent;color:var(--muted)}.bell-head button:hover{color:var(--red);border-color:var(--red)}.bell-list{overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}.bell-item{padding:15px 16px;border-bottom:1px solid var(--line)}.bell-item:last-child{border-bottom:0}.bell-item.fresh{background:var(--tint)}.bell-item-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.bell-item-head b{font-size:12px}.bell-item-head small{font:9px ui-monospace,monospace;color:var(--muted);white-space:nowrap}.bell-item p{margin:8px 0 0;font-size:11px;color:var(--muted);line-height:1.6}.bell-item .btn,.bell-item button{margin-top:11px;padding:8px 13px;font-size:11px}.bell-changes{margin:9px 0 0;padding:0;list-style:none;display:grid;gap:6px}.bell-changes li{position:relative;padding-left:14px;font-size:11px;line-height:1.55;color:var(--muted);overflow-wrap:anywhere}.bell-changes li:before{content:"";position:absolute;left:2px;top:7px;width:5px;height:5px;border-radius:2px;background:var(--accent)}.bell-link{display:inline-block;margin-top:10px;font-size:10px}.bell-empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:11px;line-height:1.6}
+.bell-wrap{position:relative}.bell-btn{position:relative}.bell-count{position:absolute;top:-6px;right:-7px;min-width:16px;height:16px;padding:0 4px;display:grid;place-items:center;border-radius:8px;background:var(--accent);color:var(--on-accent);font:600 9px/1 ui-monospace,monospace}.bell-menu{position:absolute;right:0;top:calc(100% + 9px);z-index:50;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);width:min(380px,calc(100vw - 48px));max-height:min(70dvh,560px)}.bell-menu[hidden]{display:none}.bell-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line);flex:0 0 auto}.bell-head b{font-size:12px}.bell-head button{padding:6px 10px;font-size:10px;background:transparent;border-color:transparent;color:var(--muted)}.bell-head button:hover{color:var(--red);border-color:var(--red)}.bell-list{overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}.bell-item{padding:15px 16px;border-bottom:1px solid var(--line)}.bell-item:last-child{border-bottom:0}.bell-item.fresh{background:var(--tint)}.bell-item-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.bell-item-head b{font-size:12px}.bell-item-head small{font:9px ui-monospace,monospace;color:var(--muted);white-space:nowrap}.bell-item p{margin:8px 0 0;font-size:11px;color:var(--muted);line-height:1.6}.bell-item .btn,.bell-item button{margin-top:11px;padding:8px 13px;font-size:11px}.bell-changes{margin:9px 0 0;padding:0;list-style:none;display:grid;gap:6px}.bell-changes li{position:relative;padding-left:14px;font-size:11px;line-height:1.55;color:var(--muted);overflow-wrap:anywhere}.bell-changes li:before{content:"";position:absolute;left:2px;top:7px;width:5px;height:5px;border-radius:2px;background:var(--accent)}.bell-link{display:inline-block;margin-top:10px;font-size:10px}.bell-empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:11px;line-height:1.6}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 '''
 
@@ -415,8 +426,10 @@ box.addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(!b)retu
 </script>'''
 
 # Appbar bell: server-side version notifications ("available" with an update
-# button, changelog after a finished update) plus "clear all". Anchored with
-# position:fixed so no scrolling container can clip the panel.
+# button, changelog after a finished update) plus "clear all". The panel is
+# anchored with plain CSS (absolute under the button): the appbar carries
+# backdrop-filter, which makes it the coordinate box for fixed elements and
+# shifted any JS-computed viewport coordinates away from the bell.
 BELL_JS='''<script>
 (()=>{const PATH=@@PATH@@,CSRF='@@CSRF@@';
 const btn=document.querySelector('[data-bell]');if(!btn)return;
@@ -439,14 +452,11 @@ function render(){
   if(!items.length){list.innerHTML='<p class="bell-empty">Пока нет уведомлений. Здесь появится информация о новых версиях панели и список изменений после обновления.</p>';return}
   list.innerHTML=items.map(itemHTML).join('')}
 async function load(){try{const r=await fetch(PATH+'/notifications',{cache:'no-store'});if(!r.ok||r.redirected)return;const d=await r.json();items=(Array.isArray(d.items)?d.items.slice():[]).reverse();unread=Number(d.unread)||0;badge();if(open)render()}catch(e){}}
-function position(){const r=btn.getBoundingClientRect(),w=Math.min(380,innerWidth-24);let left=r.right-w;if(left<12)left=12;menu.style.position='fixed';menu.style.left=left+'px';menu.style.right='auto';menu.style.top=(r.bottom+9)+'px';menu.style.width=w+'px'}
 function markRead(){if(unread<1)return;unread=0;badge();items.forEach(i=>i.read=true);if(open)render();fetch(PATH+'/notifications-read',{method:'POST',body:new URLSearchParams({csrf:CSRF})}).catch(()=>{})}
-function setOpen(state){if(state===open)return;open=state;menu.hidden=!state;if(state){position();load().then(markRead)}}
+function setOpen(state){if(state===open)return;open=state;menu.hidden=!state;if(state)load().then(markRead)}
 btn.addEventListener('click',e=>{e.stopPropagation();setOpen(!open)});
 document.addEventListener('click',e=>{if(open&&!e.target.closest('.bell-wrap'))setOpen(false)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&open)setOpen(false)});
-addEventListener('resize',()=>{if(open)position()});
-const workspace=btn.closest('.workspace');if(workspace)workspace.addEventListener('scroll',()=>{if(open)position()},{passive:true});
 function watch(){if(watching)return;watching=true;let down=false;
   const tick=setInterval(async()=>{let d=null;
     try{const r=await fetch(PATH+'/update-status',{cache:'no-store'});if(r.ok&&!r.redirected)d=await r.json()}catch(e){}
@@ -457,7 +467,7 @@ function watch(){if(watching)return;watching=true;let down=false;
     if(d.phase==='done')setTimeout(()=>location.reload(),1200);
     else if(d.phase==='failed'||d.phase==='interrupted')onyxToast(d.message||'Обновление завершилось ошибкой.','err');
   },5000)}
-list.addEventListener('click',async e=>{
+menu.addEventListener('click',async e=>{
   if(e.target.closest('[data-bell-clear]')){
     try{await fetch(PATH+'/notifications-clear',{method:'POST',body:new URLSearchParams({csrf:CSRF})})}catch(err){}
     items=[];unread=0;badge();render();return}
@@ -490,7 +500,7 @@ def login_ui(path, totp=False):
     code_field = ('<label for="loginCode">Код двухфакторной аутентификации</label>'
                   '<input id="loginCode" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6"'
                   ' autocomplete="one-time-code" placeholder="6 цифр из приложения">') if totp else ''
-    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>Вход · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body class="login-page"><div class="login-theme">{theme_button()}</div><main class="login-card"><img class="signin-logo" src="{esc(path)}/__logo" alt="Onyx Panel"><h1>Onyx Panel</h1><p>Панель управления подключениями</p><form method="post" action="{esc(path)}/login"><label for="loginName">Логин</label><input id="loginName" name="user" autocomplete="username" required autofocus><label for="loginPassword">Пароль</label><input id="loginPassword" type="password" name="password" autocomplete="current-password" required>{code_field}<button class="primary">Войти</button></form><small class="login-version">{VERSION}</small></main>{COMMON_JS}</body></html>'''
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>Вход · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body class="login-page"><div class="login-theme">{theme_button()}</div><main class="login-card"><img class="signin-logo" src="{esc(path)}/__logo" alt="Onyx Panel"><h1>Onyx Panel</h1><p>Панель управления подключениями</p><form method="post" action="{esc(path)}/login"><label for="loginName">Логин</label><input id="loginName" name="user" autocomplete="username" required autofocus><label for="loginPassword">Пароль</label><input id="loginPassword" type="password" name="password" autocomplete="current-password" required>{code_field}<button class="primary">Войти</button></form><small class="login-version">{login_version()}</small></main>{COMMON_JS}</body></html>'''
 
 
 
