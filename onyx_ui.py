@@ -350,7 +350,7 @@ function hide(){overlay.classList.remove('show');setTimeout(()=>{overlay.hidden=
 function confirm(label,target){card.classList.remove('spin','upd-done','upd-err');ringText.textContent='↑';title.textContent='Обновить '+label+'?';text.textContent='Версия '+target+' установится поверх текущей. При ошибке — автоматический откат.';actions.hidden=false;overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'));return new Promise(res=>{resolveActions=res})}
 goBtn.addEventListener('click',()=>{if(resolveActions){const r=resolveActions;resolveActions=null;r(true)}});
 cancelBtn.addEventListener('click',()=>{if(resolveActions){const r=resolveActions;resolveActions=null;r(false);hide()}});
-async function api(url,body){const r=await fetch(url,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams(body)});let j;try{j=await r.json()}catch(e){throw new Error('Панель не отвечает')}if(!r.ok)throw new Error(j.message||'Не выполнено');return j}
+async function api(url,body){const r=await fetch(url,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams(body),signal:window.AbortSignal?AbortSignal.timeout(10000):undefined});let j;try{j=await r.json()}catch(e){throw new Error('Панель не отвечает')}if(!r.ok)throw new Error(j.message||'Не выполнено');return j}
 const LABELS={xray:'Xray',openflux:'OpenFlux',awg:'AmneziaWG',mtproto:'MTProto'};
 window.ONYXCompModal={async install(component,target){
  if(!target)return;
@@ -362,7 +362,7 @@ window.ONYXCompModal={async install(component,target){
  try{
   try{await api(PATH+'/component-install',{csrf:CSRF,component,target})}
   catch(e){if(!String(e.message).includes('уже выполняется'))throw e}
-  for(let i=0;i<600;i++){
+  while(Date.now()-started<30*60*1000){
    await new Promise(r=>setTimeout(r,3000));
    ringText.textContent=Math.floor((Date.now()-started)/1000)+' с';
    let st;
@@ -1121,7 +1121,7 @@ input[type=date]{color-scheme:dark}
 /* Update modal states: spinning arc while installing, countdown before reload */
 .move-ring.spin svg{animation:updspin 1.1s linear infinite}
 @keyframes updspin{from{transform:rotate(-90deg)}to{transform:rotate(270deg)}}
-.move-ring.spin .move-ring-fg{stroke-dasharray:64 212.5;stroke-dashoffset:0;transition:none}
+.move-ring.spin .move-ring-fg{stroke-dasharray:64 212.5;stroke-dashoffset:0;transition:none}.move-card.spin .move-ring svg{animation:updspin 1.1s linear infinite}.move-card.spin .move-ring-fg{stroke-dasharray:64 212.5;stroke-dashoffset:0;transition:none}
 .move-ring.time b{font-size:19px;letter-spacing:.04em}
 .move-card.upd-done .move-ring b{color:var(--green)}
 .move-card.upd-done .move-ring-fg{stroke:var(--green)}
