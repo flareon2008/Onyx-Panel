@@ -65,6 +65,11 @@ def _version_tuple(value):
     return tuple(int(x) for x in numbers[:4])
 
 
+def _version_file(component):
+    """Version stamp next to the binary; OpenFlux cannot report its own."""
+    return SPECS[component]["binary"].parent / "version"
+
+
 def _current(component):
     if component == "mtproto":
         marker = Path("/opt/MTProxy/.tproxy-commit")
@@ -86,6 +91,17 @@ def _current(component):
             match = re.search(r"v?(\d+(?:\.\d+){1,3})", " ".join(value[:2]))
             if match:
                 return match.group(1)
+    # OpenFlux has no version flag: fall back to the install-time stamp, then
+    # to the tag recorded by the last successful component install.
+    fallbacks = []
+    try:
+        fallbacks.append(_version_file(component).read_text(encoding="ascii").strip())
+    except OSError:
+        pass
+    fallbacks.append(str((read_state(STATUS).get("installed") or {}).get(component, "")))
+    for source in fallbacks:
+        if re.fullmatch(r"v?\d+(?:\.\d+){1,3}", source or ""):
+            return source.lstrip("v")
     return "установлен"
 
 
@@ -306,6 +322,13 @@ def run():
         with tempfile.TemporaryDirectory(prefix="onyx-component-") as directory:
             _install(component, tag, Path(directory))
         state.update(phase="done", message=f"{component} {tag} установлен. Проверка службы пройдена.")
+        try:
+            stamp = _version_file(component)
+            stamp.write_text(tag + "\n", encoding="ascii")
+            os.chmod(stamp, 0o644)
+        except OSError:
+            pass
+        state["installed"] = {**(state.get("installed") or {}), component: tag}
     except Exception as exc:
         state.update(phase="failed", message="Изменение отменено: " + str(exc)[:600])
     state["finished"] = int(time.time())
