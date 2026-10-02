@@ -672,6 +672,10 @@ def openflux_create_dialog(path, csrf):
 
 def users_ui(subs, profiles, traffic, path, domain, csrf, proxy_link, openflux_profiles=None, expires=None):
     records=client_records(subs,profiles,traffic,domain,proxy_link,expires)
+    # The primary WEB Proxy is the installation core, not a managed client: it
+    # keeps working as before but is not listed, so counts match what the
+    # operator actually manages.
+    records=[r for r in records if r['id']!='primary']
     rows=[]; dialogs=[]
     for r in records:
         uid=r['id']; sid=esc(uid); name=esc(r['name']); t=r['totals']; enabled=r['enabled']; total=t['up']+t['down']
@@ -1337,7 +1341,7 @@ def _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, pr
         text=f'{percent:.1f}%' if percent is not None else '—'
         detail=f'Ядер: {latest.get("cores", "—")} · средняя загрузка' if key=='cpu' else ('Не используется' if key=='swap' and total==0 else size(used)+' / '+size(total))
         resources.append(f'<div class="resource"><div class="resource-ring" style="--value:{max(0,min(100,percent or 0)):.2f}%"><b>{text}</b></div><div class="resource-copy"><strong>{label}</strong><small>{detail}</small></div></div>')
-    direct=[u for u in profiles if not u.get('subscription_id')]
+    direct=[u for u in profiles if not u.get('subscription_id') and u.get('id')!='primary']
     active=sum(aggregate(s['live_profile_ids'],traffic,s.get('enabled',True))['active'] for s in subs)+sum(aggregate([u['id']],traffic,u.get('enabled',True))['active'] for u in direct)
     total_up=sum(max(0,int(v.get('up',0))) for v in traffic.values() if isinstance(v,dict)); total_down=sum(max(0,int(v.get('down',0))) for v in traffic.values() if isinstance(v,dict))
     stats=''.join(f'<div class="overview-stat"><span>{label}</span><b>{value}</b></div>' for label,value in [('Клиенты',len(subs)+len(direct)),('Подписок',len(subs)),('Передают трафик',active),('Всего трафика',size(total_up+total_down))])
@@ -1349,6 +1353,7 @@ def _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, pr
     details=''.join(f'<div class="detail-line"><span>{k}</span><strong>{v}</strong></div>' for k,v in detail)
     controls=''.join(f'<button data-range="{n}" class="{"selected" if n==hours else ""}">{n} ч</button>' for n in (1,6,24))
     records=client_records(subs,profiles,traffic,domain,proxy_link)
+    records=[r for r in records if r['id']!='primary']
     shown=sorted(records,key=lambda r:(bool(r['totals']['active']),r['totals']['up']+r['totals']['down']),reverse=True)[:8]
     return f'''<div data-live-block="health" class="live-block">{health}</div><section class="card resource-deck live-block" data-live-block="resources"><div class="resource-grid">{''.join(resources)}</div></section><div class="overview-stats live-block" data-live-block="overview">{stats}</div><div class="dashboard-grid"><section class="card graph-card"><div class="card-title"><div><span class="eyebrow">TRAFFIC / LIVE HISTORY</span><h2>Трафик прокси</h2></div><div class="range">{controls}</div></div><div class="graph-speeds live-block" data-live-block="speeds"><div><span>↑ Отправка</span><b>{size(latest.get('up_rate')) if traffic_fresh else '—'}</b><small> / с</small></div><div><span>↓ Получение</span><b>{size(latest.get('down_rate')) if traffic_fresh else '—'}</b><small> / с</small></div></div><div class="chart-wrap live-block" data-live-block="chart">{graph}</div><div class="legend"><span><i></i>Отправка</span><span class="down"><i></i>Получение</span><span>До 24 часов · замер ~10 с · UTC</span></div></section><section class="card"><div class="card-title"><h2>Службы и версия</h2><span class="pill">{esc(current)}</span></div><div class="node-label"><i></i><div class="node-domain">{esc(domain)}</div></div><div class="service-list live-block" data-live-block="services">{services_html}</div><div class="update-box"><div class="actions"><button id="checkUpdate">{icon('refresh')}Загрузить версии</button></div><div class="version-row"><label for="panelRelease">Панель</label><select id="panelRelease" aria-label="Версия панели"><option>Сначала загрузите список</option></select><button class="primary" id="startUpdate" hidden>Установить</button></div><p id="updateStatus" role="status">Можно обновиться или вернуться на прежний стабильный релиз GitLab</p></div></section></div><section class="card version-manager"><div class="card-title"><div><h2>Версии компонентов</h2><p>Обновление и откат без выпуска новой версии панели</p></div><button id="checkComponents">{icon('refresh')}Загрузить версии</button></div><div class="version-row"><label for="xrayRelease">Xray</label><select id="xrayRelease"><option>Сначала загрузите список</option></select><button data-component-install="xray" class="primary" disabled>Установить</button><small class="version-state" id="xrayCurrent">Текущая версия определяется…</small></div><div class="version-row"><label for="openfluxRelease">OpenFlux</label><select id="openfluxRelease"><option>Сначала загрузите список</option></select><button data-component-install="openflux" class="primary" disabled>Установить</button><small class="version-state" id="openfluxCurrent">Текущая версия определяется…</small></div><p id="componentStatus" class="note" role="status">Перед заменой создаётся резервная копия. Если служба не запустится, прежний бинарник восстановится автоматически.</p></section><div class="two-col equal"><section class="card"><div class="card-title"><h2>Ресурсы сервера</h2><span class="pill">VPS</span></div><div class="detail-list live-block" data-live-block="server-details">{details}</div></section><section class="card"><div class="card-title"><h2>Накопленный трафик</h2></div><div class="detail-list live-block" data-live-block="traffic-details"><div class="detail-line"><span>Отправлено</span><strong>↑ {size(total_up)}</strong></div><div class="detail-line"><span>Получено</span><strong>↓ {size(total_down)}</strong></div><div class="detail-line"><span>Последнее измерение</span><strong>{str(age)+' с назад' if latest else 'Нет измерений'}</strong></div></div><p class="note">Только трафик прокси. Активность — передача данных за последние 90 секунд, не число устройств онлайн.</p></section></div><section class="card"><div class="card-title"><h2>Пользователи и подписки</h2><a href="{esc(path)}/users" class="btn quiet">Управление →</a></div><div class="live-block" data-live-block="clients">{client_glances(shown,path)}<small>Показано {len(shown)} из {len(records)} · сначала передающие данные</small></div></section>'''
 
@@ -1377,6 +1382,8 @@ def _top_consumers_card(path, profiles, traffic, limit=5):
     """Card with the profiles that used the most traffic (lifetime counters)."""
     rows = []
     for user in (profiles or []):
+        if str(user.get('id', '')) == 'primary':
+            continue
         item = (traffic or {}).get(str(user.get('id', '')), {})
         up = max(0, int(item.get('up', 0)))
         down = max(0, int(item.get('down', 0)))
