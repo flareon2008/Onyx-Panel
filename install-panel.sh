@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.14..."
+    echo "Updating Onyx Panel 1.8.15..."
 else
-    echo "Configuring Onyx Panel 1.8.14..."
+    echo "Configuring Onyx Panel 1.8.15..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2452,7 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.14","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.15","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2718,7 +2718,7 @@ class Handler(BaseHTTPRequestHandler):
 <section class="panel-setting"><div class="panel-setting-info"><b>Двухфакторная аутентификация (TOTP)</b><small>Статус: {totp_status}. При входе панель запросит код из приложения-аутентификатора (Google Authenticator, 1Password и любые совместимые).</small></div><div class="actions"><button type="button" class="btn primary" id="totpSetupBtn">{"Настроить заново" if totp_cfg.get("enabled") else "Включить 2FA"}</button>{f'<button type="button" class="btn danger" id="totpDisableBtn">Выключить 2FA</button>' if totp_cfg.get("enabled") else ''}</div><p class="panel-setting-status" id="totpStatus" role="status"></p></section>
 <section class="panel-setting"><div class="panel-setting-info"><b>Наблюдатель</b><small>Второй аккаунт только для чтения: дашборд, клиенты, ноды, каскады. Изменения запрещены на уровне сервера. Очистите оба поля, чтобы удалить доступ.</small></div><form id="observerForm" action="{PANEL_PATH}/observer-save"><input type="hidden" name="csrf" value="{token}"><div class="admin-access-grid"><div><label for="observerUser">Логин наблюдателя</label><input id="observerUser" name="user" value="{esc(observer.get("user",""))}" autocomplete="off" placeholder="Например, assistant"></div><div><label for="observerPass">Пароль</label><input id="observerPass" type="password" name="a" autocomplete="new-password" placeholder="{"Оставить текущий" if observer.get("hash") else "Минимум 3 символа"}"></div></div><div class="actions"><button type="submit" class="btn primary">Сохранить наблюдателя</button></div><p class="panel-setting-status" id="observerStatus" role="status"></p></form></section>
 <section class="panel-setting"><div class="panel-setting-info"><b>Ключи внешнего API</b><small>REST API для ботов и биллингов: Bearer-токен в заголовке Authorization, адрес <code>{panel_url}/api/v1/clients</code>.</small></div><div>{api_rows or '<p class="muted" style="font-size:12px;margin:6px 0">Ключей пока нет.</p>'}</div><form id="apiKeyForm" action="{PANEL_PATH}/api-keys-create"><input type="hidden" name="csrf" value="{token}"><div class="admin-access-grid"><div><label for="apiKeyName">Название нового ключа</label><input id="apiKeyName" name="name" maxlength="60" placeholder="Например, Бот продаж" autocomplete="off"></div></div><div class="actions"><button type="submit" class="btn primary">Создать ключ</button></div><p class="panel-setting-status" id="apiKeyStatus" role="status"></p></form></section>
-<section class="panel-setting"><div class="panel-setting-info"><b>Журнал входов</b><small>Последние входы в панель. «Новое устройство» — первый вход с такого браузера.</small></div><table class="login-log"><tr><th>Время</th><th>Кто</th><th>IP</th><th>Устройство</th></tr>{login_rows}</table></section>
+<section class="panel-setting"><div class="panel-setting-info"><b>Журнал входов</b><small>Последние входы в панель. «Новое устройство» — первый вход с такого браузера.</small></div><table class="login-log"><thead><tr><th>Время</th><th>Кто</th><th>IP</th><th>Устройство</th></tr></thead><tbody id="loginLogRows">{login_rows}</tbody></table><nav class="login-pager" id="loginPager" hidden><button type="button" id="loginPrev" aria-label="Предыдущая страница">‹</button><span id="loginPageLabel">1 / 1</span><button type="button" id="loginNext" aria-label="Следующая страница">›</button></nav></section>
 </div></div>
 <dialog id="totpDialog" class="totp-dialog"><button type="button" class="totp-close" data-close-dialog aria-label="Закрыть">×</button><svg class="totp-mark" viewBox="0 0 128 128" aria-hidden="true"><g transform="translate(14 14)"><path fill="#FF792D" d="M50 5C25 5 5 25 5 50C5 63 10 74 19 82C10 57 24 31 50 28C66 26 77 31 87 40C82 20 67 5 50 5Z M50 95C75 95 95 75 95 50C95 37 90 26 81 18C90 43 76 69 50 72C34 74 23 69 13 60C18 80 33 95 50 95Z"/></g></svg><h2>Включение 2FA</h2><p class="totp-hint">Отсканируйте QR в приложении-аутентификаторе</p><img id="totpQr" alt="QR-код TOTP" hidden><p class="totp-secret-line">Секрет: <code id="totpSecret"></code></p><p class="totp-otp-label">Введите код из приложения</p><div class="totp-cells" id="totpCells"><input inputmode="numeric" maxlength="1" autocomplete="one-time-code"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"></div><input type="hidden" id="totpCode"><p class="totp-status" id="totpDialogStatus" role="status"></p><div class="totp-actions"><button type="button" class="btn quiet" data-close-dialog>Отмена</button><button type="button" class="primary" id="totpConfirm">Включить</button></div></dialog>
 <dialog id="apiKeyDialog" class="create-dialog"><div class="dialog-head"><div><h2>Ключ создан</h2><small>Токен показывается только один раз — сохраните его</small></div><button type="button" data-close-dialog aria-label="Закрыть">×</button></div><div style="padding:0 4px"><textarea class="code-editor" id="apiKeyToken" readonly style="min-height:74px"></textarea><div class="actions create-actions"><button type="button" class="btn" id="apiKeyCopy">Скопировать</button><button type="button" class="btn primary" data-close-dialog>Готово</button></div></div></dialog>'''
@@ -2815,6 +2815,27 @@ if(compGrid){
     })
   })
 }
+})();
+</script>
+<script>
+(()=>{const tbody=document.getElementById('loginLogRows');
+if(!tbody)return;
+const rows=Array.prototype.slice.call(tbody.rows);
+if(rows.length<=3)return;
+const per=3,pages=Math.ceil(rows.length/per);
+let page=0;
+const pager=document.getElementById('loginPager'),label=document.getElementById('loginPageLabel'),
+      prev=document.getElementById('loginPrev'),next=document.getElementById('loginNext');
+function render(){
+  rows.forEach((r,i)=>{r.hidden=i<page*per||i>=page*per+per});
+  label.textContent=(page+1)+' / '+pages;
+  prev.disabled=page===0;
+  next.disabled=page===pages-1;
+}
+prev.addEventListener('click',()=>{if(page>0){page--;render()}});
+next.addEventListener('click',()=>{if(page<pages-1){page++;render()}});
+pager.hidden=false;
+render();
 })();
 </script>'''
             security_js='''<script>
@@ -4192,7 +4213,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.14
+Description=Onyx Panel 1.8.15
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4748,9 +4769,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.14 UPDATED"
+echo "          Onyx Panel 1.8.15 UPDATED"
 else
-echo "         Onyx Panel 1.8.14 IS READY"
+echo "         Onyx Panel 1.8.15 IS READY"
 fi
 echo "============================================================"
 echo

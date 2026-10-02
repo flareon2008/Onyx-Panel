@@ -290,6 +290,11 @@ CSS += '''.palette-dialog{width:min(560px,calc(100vw - 28px));padding:0;border:1
 .login-log th{text-align:left;color:var(--muted);font-weight:550;padding:7px 6px;border-bottom:1px solid var(--line)}
 .login-log td{padding:8px 6px;border-bottom:1px solid var(--line)}
 .login-log td.muted{color:var(--muted)}
+.login-log tr[hidden]{display:none}
+.login-pager{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 0 2px}
+.login-pager button{width:30px;height:30px;padding:6px;font-size:15px;line-height:1;border-radius:9px}
+.login-pager button:disabled{opacity:.4;cursor:default}
+.login-pager span{font:550 11px ui-monospace,monospace;color:var(--muted);min-width:44px;text-align:center}
 .api-key-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12px}
 .api-key-row b{min-width:0;flex:1;overflow-wrap:anywhere}
 .preset-live-bar{display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border:1px solid var(--line);border-radius:10px;background:var(--raised);font:11px ui-monospace,monospace;color:var(--muted)}
