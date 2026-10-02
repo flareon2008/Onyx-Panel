@@ -443,9 +443,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.7.2..."
+    echo "Updating Onyx Panel 1.8.0..."
 else
-    echo "Configuring Onyx Panel 1.7.2..."
+    echo "Configuring Onyx Panel 1.8.0..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -483,7 +483,7 @@ for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics
     install -o root -g root -m 0644 "$BASE/$module" "$APP_DIR/$module"
 done
 install -d -o root -g root -m 0755 "$APP_DIR/fonts"
-for font in manrope-cyrillic-wght-normal.woff2 manrope-latin-wght-normal.woff2 jetbrains-mono-cyrillic-wght-normal.woff2 jetbrains-mono-latin-wght-normal.woff2; do
+for font in dashboard-sans-normal.woff2 dashboard-sans-semibold.woff2 manrope-cyrillic-wght-normal.woff2 manrope-latin-wght-normal.woff2 jetbrains-mono-cyrillic-wght-normal.woff2 jetbrains-mono-latin-wght-normal.woff2; do
     [[ -s "$BASE/fonts/$font" ]] || die "Bundled font is missing: fonts/$font."
     install -o root -g root -m 0644 "$BASE/fonts/$font" "$APP_DIR/fonts/$font"
 done
@@ -2452,7 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.7.2","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.0","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -4182,7 +4182,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.7.2
+Description=Onyx Panel 1.8.0
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4738,9 +4738,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.7.2 UPDATED"
+echo "          Onyx Panel 1.8.0 UPDATED"
 else
-echo "         Onyx Panel 1.7.2 IS READY"
+echo "         Onyx Panel 1.8.0 IS READY"
 fi
 echo "============================================================"
 echo

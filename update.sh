@@ -15,7 +15,7 @@ REPOSITORY="${ONYX_UPDATE_REPOSITORY:-https://github.com/xCodeOn/Onyx-Panel.git}
 REQUESTED_REF="${ONYX_PANEL_REF:-}"
 RELEASE_REF="$REQUESTED_REF"
 LOCAL_SOURCE=""
-LOCAL_VERSION="1.7.2"
+LOCAL_VERSION="1.8.0"
 # `--local` is accepted for compatibility and behaves the same as the default.
 LOCAL_SOURCE="$(cd "$(dirname "$0")" && pwd)"
 # Invoked as the installed /usr/local/sbin/onyx-panel-update, the script's own
@@ -36,7 +36,7 @@ require_local_archive() {
     for asset in amneziawg-go-linux-amd64 awg-linux-amd64 awg-quick-linux-amd64; do
         [[ -s "$LOCAL_SOURCE/assets/$asset" ]] || gap="$gap assets/$asset"
     done
-    for font in manrope-cyrillic-wght-normal.woff2 manrope-latin-wght-normal.woff2 jetbrains-mono-cyrillic-wght-normal.woff2 jetbrains-mono-latin-wght-normal.woff2; do
+    for font in dashboard-sans-normal.woff2 dashboard-sans-semibold.woff2 manrope-cyrillic-wght-normal.woff2 manrope-latin-wght-normal.woff2 jetbrains-mono-cyrillic-wght-normal.woff2 jetbrains-mono-latin-wght-normal.woff2; do
         [[ -s "$LOCAL_SOURCE/fonts/$font" ]] || gap="$gap fonts/$font"
     done
     [[ -s "$LOCAL_SOURCE/onyx-panel/flags.tar.gz" ]] || gap="$gap onyx-panel/flags.tar.gz"
@@ -61,7 +61,7 @@ exec 9>/run/lock/onyx-panel.lock
 flock -n 9 || die "Another Onyx Panel install, update or removal is already running."
 
 echo "============================================================"
-echo "     Onyx Panel 1.7.2 — SAFE UPDATE"
+echo "     Onyx Panel 1.8.0 — SAFE UPDATE"
 echo "============================================================"
 echo "Users, administrator password, panel URL and site HTML will be retained."
 
