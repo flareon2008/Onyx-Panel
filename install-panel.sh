@@ -447,9 +447,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.25..."
+    echo "Updating Onyx Panel 1.8.26..."
 else
-    echo "Configuring Onyx Panel 1.8.25..."
+    echo "Configuring Onyx Panel 1.8.26..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2456,7 +2456,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.25","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.26","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2804,7 +2804,7 @@ if(compGrid){
   function compShow(state,title,text){compCard.classList.remove("spin","upd-done","upd-err");compClose.hidden=true;compTitle.textContent=title;compText.textContent=text||"";if(state==="running"){compCard.classList.add("spin");compRingText.textContent="↑"}else if(state==="done"){compCard.classList.add("upd-done");compRingText.textContent="✓";compClose.hidden=false}else{compCard.classList.add("upd-err");compRingText.textContent="!";compClose.hidden=false}compOverlay.hidden=false;requestAnimationFrame(()=>compOverlay.classList.add("show"))}
   function compHide(){compOverlay.classList.remove("show");setTimeout(()=>{compOverlay.hidden=true},260)}
   compClose.addEventListener("click",compHide);
-  async function compRefresh(){const d=await compApi(checkUrl,{csrf:compCsrf});Object.keys(compRows).forEach(n=>{const item=compRows[n];item.ver.textContent=(d.current&&d.current[n])||"—";if(item.sel){const tags=(d.catalog&&d.catalog[n])||[];const cur=(d.current&&d.current[n])||"";item.sel.innerHTML="";tags.slice(0,6).forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t==="v"+cur?t+" — установлена":t;item.sel.appendChild(o)})}});return d}
+  async function compRefresh(){const d=await compApi(checkUrl,{csrf:compCsrf});Object.keys(compRows).forEach(n=>{const item=compRows[n];item.ver.textContent=(d.current&&d.current[n])||"—";if(item.sel){const tags=(d.catalog&&d.catalog[n])||[];const cur=(d.current&&d.current[n])||"";const wanted="v"+cur;const list=tags.slice(0,6);if(wanted&&list.indexOf(wanted)<0&&tags.indexOf(wanted)>=0)list.push(wanted);item.sel.innerHTML="";list.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t===wanted?t+" — установлена":t;item.sel.appendChild(o)});if(wanted&&list.indexOf(wanted)>=0)item.sel.value=wanted}});return d}
   compRefresh().catch(()=>{Object.values(compRows).forEach(item=>{item.ver.textContent="—"})});
   Object.keys(compRows).forEach(n=>{const item=compRows[n];
     item.btn.addEventListener("click",async()=>{
@@ -4231,7 +4231,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.25
+Description=Onyx Panel 1.8.26
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4787,9 +4787,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.25 UPDATED"
+echo "          Onyx Panel 1.8.26 UPDATED"
 else
-echo "         Onyx Panel 1.8.25 IS READY"
+echo "         Onyx Panel 1.8.26 IS READY"
 fi
 echo "============================================================"
 echo
