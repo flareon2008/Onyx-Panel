@@ -341,39 +341,43 @@ input[type=checkbox]{accent-color:var(--accent)}
 COMPONENT_MODAL_JS = '''<script>
 (()=>{const PATH=@@PATH@@,CSRF=@@CSRF@@;
 const overlay=document.createElement('div');overlay.className='move-overlay';overlay.hidden=true;
-overlay.innerHTML='<div class="move-card" id="onyxCompCard"><div class="move-ring" id="onyxCompRing"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" cx="50" cy="50" r="44"/></svg><b id="onyxCompRingText">\u2191</b></div><h3 id="onyxCompTitle">Обновление</h3><p id="onyxCompText"></p><div class="actions upd-actions"><button type="button" id="onyxCompClose" hidden>Закрыть</button></div></div>';
+overlay.innerHTML='<div class="move-card" id="onyxCompCard"><div class="move-ring" id="onyxCompRing"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" cx="50" cy="50" r="44"/></svg><b id="onyxCompRingText">↑</b></div><h3 id="onyxCompTitle">Обновление</h3><p id="onyxCompText"></p><div class="actions upd-actions" id="onyxCompActions" hidden><button type="button" id="onyxCompCancel">Отмена</button><button type="button" class="primary" id="onyxCompGo">Установить</button></div><div class="actions upd-actions"><button type="button" id="onyxCompClose" hidden>Закрыть</button></div></div>';
 document.body.append(overlay);
-const card=overlay.querySelector('#onyxCompCard'),ringText=overlay.querySelector('#onyxCompRingText'),title=overlay.querySelector('#onyxCompTitle'),text=overlay.querySelector('#onyxCompText'),closeBtn=overlay.querySelector('#onyxCompClose');
-function show(state,t,m){card.classList.remove('spin','upd-done','upd-err');closeBtn.hidden=true;title.textContent=t;text.textContent=m||'';if(state==='running'){card.classList.add('spin');ringText.textContent='\u2191'}else if(state==='done'){card.classList.add('upd-done');ringText.textContent='\u2713';closeBtn.hidden=false}else{card.classList.add('upd-err');ringText.textContent='!';closeBtn.hidden=false}overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'))}
-function hide(){overlay.classList.remove('show');setTimeout(()=>{overlay.hidden=true},260)}
-closeBtn.addEventListener('click',hide);
+const card=overlay.querySelector('#onyxCompCard'),ringText=overlay.querySelector('#onyxCompRingText'),title=overlay.querySelector('#onyxCompTitle'),text=overlay.querySelector('#onyxCompText'),actions=overlay.querySelector('#onyxCompActions'),goBtn=overlay.querySelector('#onyxCompGo'),cancelBtn=overlay.querySelector('#onyxCompCancel'),closeBtn=overlay.querySelector('#onyxCompClose');
+let resolveActions=null;
+function show(state,t,m){card.classList.remove('spin','upd-done','upd-err');actions.hidden=true;closeBtn.hidden=true;title.textContent=t;text.textContent=m||'';if(state==='running')card.classList.add('spin');overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'))}
+function hide(){overlay.classList.remove('show');setTimeout(()=>{overlay.hidden=true},260);resolveActions=null}
+function confirm(label,target){card.classList.remove('spin','upd-done','upd-err');ringText.textContent='↑';title.textContent='Обновить '+label+'?';text.textContent='Версия '+target+' установится поверх текущей. При ошибке — автоматический откат.';actions.hidden=false;overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'));return new Promise(res=>{resolveActions=res})}
+goBtn.addEventListener('click',()=>{if(resolveActions){const r=resolveActions;resolveActions=null;r(true)}});
+cancelBtn.addEventListener('click',()=>{if(resolveActions){const r=resolveActions;resolveActions=null;r(false);hide()}});
 async function api(url,body){const r=await fetch(url,{method:'POST',headers:{'X-Onyx-Async':'1'},body:new URLSearchParams(body)});let j;try{j=await r.json()}catch(e){throw new Error('Панель не отвечает')}if(!r.ok)throw new Error(j.message||'Не выполнено');return j}
 const LABELS={xray:'Xray',openflux:'OpenFlux',awg:'AmneziaWG',mtproto:'MTProto'};
 window.ONYXCompModal={async install(component,target){
  if(!target)return;
  const label=LABELS[component]||component;
- if(!(await onyxConfirm('Установить '+label+' '+target+'? При ошибке будет выполнен автоматический откат.',{title:'Обновление компонента',ok:'Установить'})))return;
+ const ok=await confirm(label,target);
+ if(!ok)return;
  show('running',label,'Скачиваем релиз и перезапускаем службу…');
- const started=Date.now();
+ const started=Date.now();let misses=0;
  try{
   try{await api(PATH+'/component-install',{csrf:CSRF,component,target})}
   catch(e){if(!String(e.message).includes('уже выполняется'))throw e}
-  let misses=0;
   for(let i=0;i<600;i++){
    await new Promise(r=>setTimeout(r,3000));
    ringText.textContent=Math.floor((Date.now()-started)/1000)+' с';
    let st;
    try{st=await api(PATH+'/component-status',{csrf:CSRF});misses=0}
    catch(e){misses++;text.textContent=misses<5?'Связь прервалась — повторяем опрос…':'Связь с панелью кратко прерывается на время перезапуска службы — ждём восстановления… ('+misses+')';continue}
-   if(st.phase==='done'){show('done',label,st.message||'Готово.');setTimeout(()=>{hide();const b=document.getElementById('refreshAll')||document.getElementById('checkComponents');if(b&&!b.disabled)b.click()},2600);return}
-   if(st.phase==='failed'){show('err',label,st.message||'Не удалось.');return}
+   if(st.phase==='done'){card.classList.remove('spin');card.classList.add('upd-done');ringText.textContent='✓';title.textContent=label+' обновлён';text.textContent=st.message||'Готово.';setTimeout(hide,2600);return}
+   if(st.phase==='failed'){card.classList.remove('spin');card.classList.add('upd-err');ringText.textContent='!';title.textContent=label+' — не обновлён';text.textContent=st.message||'Не удалось.';closeBtn.hidden=false;return}
    text.textContent=st.message||'Устанавливаю…';
   }
-  show('err',label,'Обновление идёт дольше 30 минут. Проверьте статус позже — установка продолжается в фоне.');
+  show('err',label,'Обновление идёт дольше 30 минут — установка продолжается в фоне.');
  }catch(e){show('err',label,e.message)}
 }};
 })();
 </script>'''
+
 
 
 def qr_dialog():

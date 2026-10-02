@@ -447,9 +447,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.33..."
+    echo "Updating Onyx Panel 1.8.34..."
 else
-    echo "Configuring Onyx Panel 1.8.33..."
+    echo "Configuring Onyx Panel 1.8.34..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2456,7 +2456,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.33","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.34","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2798,11 +2798,11 @@ if(compGrid){
   compGrid.querySelectorAll("[data-component]").forEach(row=>{compRows[row.dataset.component]={row,ver:row.querySelector("[data-ver]"),sel:row.querySelector("select"),btn:row.querySelector("button"),status:row.querySelector(".component-item-status")}});
   async function compApi(url,body){let lastErr=null;for(let a=0;a<3;a++){if(a)await new Promise(r=>setTimeout(r,1500));try{const r=await fetch(url,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams(body),signal:window.AbortSignal?AbortSignal.timeout(15000):undefined});let j;try{j=await r.json()}catch(e){lastErr=new Error("Панель не отвечает. Проверьте связь и попробуйте снова.");continue}if(!r.ok)throw new Error(j.message||"Не выполнено.");return j}catch(e){if(!String(e.message||e).startsWith("Панель не отвечает"))throw e;lastErr=e}}throw lastErr||new Error("Панель не отвечает.")}
   const compOverlay=document.createElement("div");compOverlay.className="move-overlay";compOverlay.hidden=true;
-  compOverlay.innerHTML='<div class="move-card" id="compCard"><div class="move-ring" id="compRing"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" cx="50" cy="50" r="44"/></svg><b id="compRingText">↑</b></div><h3 id="compTitle">Обновление</h3><p id="compText"></p><div class="actions upd-actions"><button type="button" id="compClose" hidden>Закрыть</button></div></div>';
+  compOverlay.innerHTML='<div class="move-card" id="compCard"><div class="move-ring" id="compRing"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" cx="50" cy="50" r="44"/></svg><b id="compRingText">↑</b></div><h3 id="compTitle">Обновление</h3><p id="compText"></p><div class="actions upd-actions" id="compActions" hidden><button type="button" id="compCancel">Отмена</button><button type="button" class="primary" id="compGo">Установить</button></div><div class="actions upd-actions"><button type="button" id="compClose" hidden>Закрыть</button></div></div>';
   document.body.append(compOverlay);
-  const compCard=compOverlay.querySelector("#compCard"),compRing=compOverlay.querySelector("#compRing"),compRingText=compOverlay.querySelector("#compRingText"),compTitle=compOverlay.querySelector("#compTitle"),compText=compOverlay.querySelector("#compText"),compClose=compOverlay.querySelector("#compClose");
-  function compShow(state,title,text){compCard.classList.remove("spin","upd-done","upd-err");compClose.hidden=true;compTitle.textContent=title;compText.textContent=text||"";if(state==="running"){compCard.classList.add("spin");compRingText.textContent="↑"}else if(state==="done"){compCard.classList.add("upd-done");compRingText.textContent="✓";compClose.hidden=false}else{compCard.classList.add("upd-err");compRingText.textContent="!";compClose.hidden=false}compOverlay.hidden=false;requestAnimationFrame(()=>compOverlay.classList.add("show"))}
-  function compHide(){compOverlay.classList.remove("show");setTimeout(()=>{compOverlay.hidden=true},260)}
+  const compCard=compOverlay.querySelector("#compCard"),compRing=compOverlay.querySelector("#compRing"),compRingText=compOverlay.querySelector("#compRingText"),compTitle=compOverlay.querySelector("#compTitle"),compText=compOverlay.querySelector("#compText"),compClose=compOverlay.querySelector("#compClose"),compActions=compOverlay.querySelector("#compActions"),compCancel=compOverlay.querySelector("#compCancel"),compGo=compOverlay.querySelector("#compGo");let resolveCompActions=null;
+  function compShow(state,title,text){compCard.classList.remove("spin","upd-done","upd-err");compActions.hidden=true;compClose.hidden=true;compTitle.textContent=title;compText.textContent=text||"";if(state==="confirm"){compRingText.textContent="↑";compCard.classList.add("spin")}else if(state==="running"){compCard.classList.add("spin");compRingText.textContent="↑"}if(state==="running"){compCard.classList.add("spin");compRingText.textContent="↑"}else if(state==="done"){compCard.classList.add("upd-done");compRingText.textContent="✓";compClose.hidden=false}else{compCard.classList.add("upd-err");compRingText.textContent="!";compClose.hidden=false}compOverlay.hidden=false;requestAnimationFrame(()=>compOverlay.classList.add("show"))}
+  function compHide(){compOverlay.classList.remove("show");setTimeout(()=>{compOverlay.hidden=true},260);resolveCompActions=null}function compConfirm(label,target){compShow("confirm",label,"Версия "+target+" установится поверх текущей. При ошибке — автоматический откат.");compActions.hidden=false;return new Promise(res=>{resolveCompActions=res})}compGo.addEventListener("click",()=>{if(resolveCompActions){const r=resolveCompActions;resolveCompActions=null;r(true)}});compCancel.addEventListener("click",()=>{if(resolveCompActions){const r=resolveCompActions;resolveCompActions=null;r(false);compHide()}});
   compClose.addEventListener("click",compHide);
   async function compRefresh(){const d=await compApi(checkUrl,{csrf:compCsrf});Object.keys(compRows).forEach(n=>{const item=compRows[n];item.ver.textContent=(d.current&&d.current[n])||"—";if(item.sel){const tags=(d.catalog&&d.catalog[n])||[];const cur=(d.current&&d.current[n])||"";const wanted="v"+cur;const bad=(n==='openflux'&&(d.unsuitable&&d.unsuitable[n]||[]))||[];const list=tags.slice(0,6);bad.forEach(t=>{if(list.indexOf(t)<0)list.push(t)});if(wanted&&list.indexOf(wanted)<0&&tags.indexOf(wanted)>=0)list.push(wanted);list.sort((a,b)=>{const p=s=>s.replace(/^v/,"").split(".").map(Number),x=p(a),y=p(b);for(let i=0;i<4;i++){if((x[i]||0)!==(y[i]||0))return (y[i]||0)>(x[i]||0)?1:-1}return 0});item.sel.innerHTML="";list.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t===wanted?t+" — установлена":(bad.indexOf(t)>=0?t+" · нет сборки для Linux":t);item.sel.appendChild(o)});if(wanted&&list.indexOf(wanted)>=0)item.sel.value=wanted}});return d}
   async function compVerify(n,target,hint){if(n!=="openflux"||!target)return;hint.hidden=false;hint.className="component-hint";hint.textContent="Проверяю версию "+target.replace(/^v/,"")+"…";try{const r=await compApi(verifyUrl,{csrf:compCsrf,component:n,target});hint.className="component-hint "+(r.ok?"ok":"err");hint.textContent=r.ok?target.replace(/^v/,"")+" подходит для установки.":(r.message||"Версия не подходит для установки.")}catch(e){hint.hidden=true}}
@@ -2812,7 +2812,7 @@ if(compGrid){
     item.btn.addEventListener("click",async()=>{
       const target=n==="mtproto"?"refresh":(item.sel?item.sel.value:"");
       if(!target){item.status.className="component-item-status err";item.status.textContent="Нет доступной версии.";return}
-      if(!(await onyxConfirm("Обновить "+item.row.dataset.label+" до "+target+"? Служба кратковременно перезапустится.",{title:"Обновление компонента",ok:"Обновить"})))return;
+      if(!(await compConfirm(item.row.dataset.label,target)))return;
       item.btn.disabled=true;
       compShow("running",item.row.dataset.label,"Скачиваем релиз и перезапускаем службу…");
       const started=Date.now();
@@ -2826,12 +2826,12 @@ if(compGrid){
           let st;
           try{st=await compApi(statusUrl,{csrf:compCsrf});misses=0}
           catch(e){misses++;compText.textContent=misses<5?"Связь прервалась — повторяем опрос…":"Связь с панелью кратко прерывается на время перезапуска Xray — ждём восстановления… ("+misses+")";continue}
-          if(st.phase==="done"){compShow("done",item.row.dataset.label,st.message||"Готово.");item.status.className="component-item-status ok";item.status.textContent=st.message||"Готово.";compRefresh().catch(()=>{});setTimeout(compHide,2600);return}
+          if(st.phase==="done"){compShow("done",item.row.dataset.label+" обновлён",st.message||"Готово.");item.status.className="component-item-status ok";item.status.textContent=st.message||"Готово.";compRefresh().catch(()=>{});setTimeout(compHide,2600);return}
           if(st.phase==="failed"){compShow("err",item.row.dataset.label,st.message||"Не удалось.");item.status.className="component-item-status err";item.status.textContent=st.message||"Не удалось.";return}
           compText.textContent=st.message||"Устанавливаю… "+(i*3)+" c";
         }
         throw new Error("Обновление идёт дольше 30 минут. Проверьте статус позже — установка продолжается в фоне.");
-      }catch(e){item.status.className="component-item-status err";item.status.textContent=e.message;compShow("err",item.row.dataset.label,e.message)}
+      }catch(e){item.status.className="component-item-status err";item.status.textContent=e.message;compShow("err",item.row.dataset.label+" — не обновлён",e.message)}
       finally{item.btn.disabled=false}
     })
   })
@@ -4237,7 +4237,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.33
+Description=Onyx Panel 1.8.34
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4793,9 +4793,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.33 UPDATED"
+echo "          Onyx Panel 1.8.34 UPDATED"
 else
-echo "         Onyx Panel 1.8.33 IS READY"
+echo "         Onyx Panel 1.8.34 IS READY"
 fi
 echo "============================================================"
 echo

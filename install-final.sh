@@ -28,7 +28,7 @@ cleanup_credentials() {
 }
 trap cleanup_credentials EXIT
 
-echo "Onyx Panel 1.8.33: preparing server..."
+echo "Onyx Panel 1.8.34: preparing server..."
 
 PANEL_UPDATE=0
 if [[ -s /var/lib/onyx-panel/data.json ]] &&
@@ -75,7 +75,7 @@ nft list table ip onyx_awg >/dev/null 2>&1 ||
 systemctl is-active --quiet onyx-panel-sync-tls.timer ||
     die "The Xray TLS synchronization timer did not start."
 echo "Installation complete."
-printf '%s\n' '1.8.33' > /etc/onyx-panel/version
+printf '%s\n' '1.8.34' > /etc/onyx-panel/version
 chmod 0600 /etc/onyx-panel/version
 
 # Keep a private copy of the complete package on the server so the panel can
@@ -86,6 +86,6 @@ if [[ "$BASE" != "/opt/onyx-panel-package" ]]; then
     cp -a "$BASE/." /opt/onyx-panel-package.tmp/
     rm -rf /opt/onyx-panel-package
     mv /opt/onyx-panel-package.tmp /opt/onyx-panel-package
-    printf '%s\n' '1.8.33' > /opt/onyx-panel-package/version
+    printf '%s\n' '1.8.34' > /opt/onyx-panel-package/version
     chmod 0600 /opt/onyx-panel-package/version
 fi
