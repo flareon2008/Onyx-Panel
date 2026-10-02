@@ -19,6 +19,8 @@ for _m in ('grp', 'pwd'): sys.modules.setdefault(_m, types.ModuleType(_m))
 _tmp = tempfile.mkdtemp()
 _extract_path = os.path.join(_tmp, "onyx_server_extract.py")
 open(_extract_path, "w", encoding="utf-8").write(_code)
+import ast as _ast
+_ast.parse(_code, feature_version=(3, 10))  # Ubuntu 22.04 ships Python 3.10
 _spec = importlib.util.spec_from_file_location("onyx_server_extract", _extract_path)
 srv = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(srv)
 

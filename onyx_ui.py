@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-VERSION = '1.8.1'
+VERSION = '1.8.2'
 
 
 def login_version():
@@ -468,7 +468,13 @@ load();setInterval(load,30000);
 
 
 def page_layout(title, body, path, active, domain, csrf='', role='admin'):
-    nav = ''.join(f'<a class="nav-button{" active" if key==active else ""}" href="{esc(path)}/{key}" data-tip="{label}" aria-label="{label}"{" aria-current=\"page\"" if key==active else ""}>{icon(glyph)}</a>' for key, label, glyph in [('dashboard','Дашборд','grid'),('users','Клиенты','users'),('nodes','Ноды','nodes'),('cascade','Каскад','cascade'),('routing','Маршрутизация','route'),('updates','Обновления','refresh'),('settings','Настройки','settings')])
+    nav = ''
+    for key, label, glyph in [('dashboard', 'Дашборд', 'grid'), ('users', 'Клиенты', 'users'), ('nodes', 'Ноды', 'nodes'),
+                              ('cascade', 'Каскад', 'cascade'), ('routing', 'Маршрутизация', 'route'),
+                              ('updates', 'Обновления', 'refresh'), ('settings', 'Настройки', 'settings')]:
+        current = ' aria-current="page"' if key == active else ''
+        state = ' active' if key == active else ''
+        nav += f'<a class="nav-button{state}" href="{esc(path)}/{key}" data-tip="{label}" aria-label="{label}"{current}>{icon(glyph)}</a>'
     banner = f'''<aside id="releaseBanner" class="release-banner" role="status" hidden><span class="release-banner-mark">{icon('refresh')}</span><div class="release-banner-copy"><b>Доступна новая версия Onyx Panel</b><small>Обновление можно установить с автоматической резервной копией</small></div><span id="releaseBannerVersion" class="release-banner-version"></span><div class="release-banner-actions"><a class="btn primary" href="{esc(path)}/updates">Посмотреть</a><button type="button" id="releaseBannerClose" class="release-banner-close" aria-label="Скрыть уведомление">×</button></div></aside>'''
     banner_script = f'''<script>(()=>{{const banner=document.getElementById('releaseBanner'),version=document.getElementById('releaseBannerVersion'),close=document.getElementById('releaseBannerClose');if(!banner)return;function dismissed(v){{try{{return localStorage.getItem('onyx-release-banner:'+v)==='1'}}catch(e){{return false}}}}function show(d){{if(!d||!d.available||!d.latest||dismissed(d.latest)){{banner.hidden=true;return}}banner.dataset.version=d.latest;version.textContent=(d.current||'—')+' → '+d.latest;banner.hidden=false}}async function check(){{try{{const r=await fetch('{esc(path)}/update-status',{{cache:'no-store'}});if(r.ok&&!r.redirected)show(await r.json())}}catch(e){{}}}}close.addEventListener('click',()=>{{const v=banner.dataset.version;if(v)try{{localStorage.setItem('onyx-release-banner:'+v,'1')}}catch(e){{}}banner.hidden=true}});window.addEventListener('onyx-update-status',e=>show(e.detail));check();setInterval(check,30000)}})();</script>'''
     return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#252526"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/svg+xml" href="{FAVICON_MARK}">{THEME_INIT}<style>{CSS}</style></head><body data-role="{esc(role)}"><div class="shell"><aside class="sidebar" aria-label="Навигация панели"><a class="brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel — на главную"><img src="{esc(path)}/__logo" alt="" width="30" height="30"></a><nav class="nav-primary" aria-label="Разделы панели">{nav}</nav><div class="nav-bottom">{bell_button(path, csrf, role)}{restart_buttons(path, csrf)}{theme_button()}<a class="nav-button" href="{esc(path)}/logout" data-tip="Выйти" aria-label="Выйти">{icon('logout')}</a></div></aside><main>{banner}{body}</main></div><dialog id="paletteDialog" class="palette-dialog" aria-label="Командная палитра"><div class="palette-box"><input id="paletteInput" placeholder="Поиск: разделы, клиенты, действия…" autocomplete="off" spellcheck="false"><div id="paletteResults" class="palette-results" role="listbox"></div><div class="palette-hint">Ctrl+K — открыть · ↑↓ — выбрать · Enter — перейти · Esc — закрыть</div></div></dialog>{COMMON_JS}{PALETTE_JS.replace('@@PATH@@',json.dumps(path))}{BELL_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',esc(csrf))}{banner_script}</body></html>'''

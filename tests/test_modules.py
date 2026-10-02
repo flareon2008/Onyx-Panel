@@ -162,4 +162,13 @@ onyx_update.get_status()
 assert onyx_update.load_notes() == []
 onyx_update.clear_notes()
 print('UPDATE NOTIFICATIONS OK')
+# ---- Python 3.10 grammar check (Ubuntu 22.04 target): no 3.12+ f-string syntax
+import ast
+import glob
+for _path in sorted(glob.glob(os.path.join(ROOT, 'onyx_*.py'))):
+    try:
+        ast.parse(open(_path, encoding='utf-8').read(), feature_version=(3, 10))
+    except SyntaxError as _e:
+        raise SystemExit(_path + ' is not Python 3.10 compatible: ' + _e.msg + ' (line ' + str(_e.lineno) + ')')
+print('PY310 GRAMMAR OK')
 print('ALL MODULE TESTS PASSED')
