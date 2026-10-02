@@ -447,9 +447,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.21..."
+    echo "Updating Onyx Panel 1.8.22..."
 else
-    echo "Configuring Onyx Panel 1.8.21..."
+    echo "Configuring Onyx Panel 1.8.22..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2456,7 +2456,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.21","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.8.22","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2796,7 +2796,14 @@ if(compGrid){
   const compCsrf=compGrid.dataset.csrf,checkUrl=compGrid.dataset.check,installUrl=compGrid.dataset.install,statusUrl=compGrid.dataset.status;
   const compRows={};
   compGrid.querySelectorAll("[data-component]").forEach(row=>{compRows[row.dataset.component]={row,ver:row.querySelector("[data-ver]"),sel:row.querySelector("select"),btn:row.querySelector("button"),status:row.querySelector(".component-item-status")}});
-  async function compApi(url,body){const r=await fetch(url,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams(body)});let j;try{j=await r.json()}catch(e){throw new Error("Панель недоступна.")}if(!r.ok)throw new Error(j.message||"Не выполнено.");return j}
+  async function compApi(url,body){const r=await fetch(url,{method:"POST",headers:{"X-Onyx-Async":"1"},body:new URLSearchParams(body)});let j;try{j=await r.json()}catch(e){throw new Error("Панель недоступна. Проверьте связь и попробуйте снова.")}if(!r.ok)throw new Error(j.message||"Не выполнено.");return j}
+  const compOverlay=document.createElement("div");compOverlay.className="move-overlay";compOverlay.hidden=true;
+  compOverlay.innerHTML='<div class="move-card" id="compCard"><div class="move-ring" id="compRing"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" cx="50" cy="50" r="44"/></svg><b id="compRingText">↑</b></div><h3 id="compTitle">Обновление</h3><p id="compText"></p><div class="actions upd-actions"><button type="button" id="compClose" hidden>Закрыть</button></div></div>';
+  document.body.append(compOverlay);
+  const compCard=compOverlay.querySelector("#compCard"),compRing=compOverlay.querySelector("#compRing"),compRingText=compOverlay.querySelector("#compRingText"),compTitle=compOverlay.querySelector("#compTitle"),compText=compOverlay.querySelector("#compText"),compClose=compOverlay.querySelector("#compClose");
+  function compShow(state,title,text){compCard.classList.remove("spin","upd-done","upd-err");compClose.hidden=true;compTitle.textContent=title;compText.textContent=text||"";if(state==="running"){compCard.classList.add("spin");compRingText.textContent="↑"}else if(state==="done"){compCard.classList.add("upd-done");compRingText.textContent="✓";compClose.hidden=false}else{compCard.classList.add("upd-err");compRingText.textContent="!";compClose.hidden=false}compOverlay.hidden=false;requestAnimationFrame(()=>compOverlay.classList.add("show"))}
+  function compHide(){compOverlay.classList.remove("show");setTimeout(()=>{compOverlay.hidden=true},260)}
+  compClose.addEventListener("click",compHide);
   async function compRefresh(){const d=await compApi(checkUrl,{csrf:compCsrf});Object.keys(compRows).forEach(n=>{const item=compRows[n];item.ver.textContent=(d.current&&d.current[n])||"—";if(item.sel){const tags=(d.catalog&&d.catalog[n])||[];const cur=(d.current&&d.current[n])||"";item.sel.innerHTML="";tags.slice(0,6).forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t==="v"+cur?t+" — установлена":t;item.sel.appendChild(o)})}});return d}
   compRefresh().catch(()=>{Object.values(compRows).forEach(item=>{item.ver.textContent="—"})});
   Object.keys(compRows).forEach(n=>{const item=compRows[n];
@@ -2804,18 +2811,24 @@ if(compGrid){
       const target=n==="mtproto"?"refresh":(item.sel?item.sel.value:"");
       if(!target){item.status.className="component-item-status err";item.status.textContent="Нет доступной версии.";return}
       if(!(await onyxConfirm("Обновить "+item.row.dataset.label+" до "+target+"? Служба кратковременно перезапустится.",{title:"Обновление компонента",ok:"Обновить"})))return;
-      item.btn.disabled=true;item.status.className="component-item-status";item.status.textContent="Запускаю обновление…";
+      item.btn.disabled=true;
+      compShow("running",item.row.dataset.label,"Скачиваем релиз и перезапускаем службу…");
+      const started=Date.now();
       try{
         await compApi(installUrl,{csrf:compCsrf,component:n,target});
+        let misses=0;
         for(let i=0;i<200;i++){
           await new Promise(r=>setTimeout(r,3000));
-          const st=await compApi(statusUrl,{csrf:compCsrf});
-          if(st.phase==="done"){item.status.className="component-item-status ok";item.status.textContent=st.message||"Готово.";compRefresh().catch(()=>{});return}
-          if(st.phase==="failed"){item.status.className="component-item-status err";item.status.textContent=st.message||"Не удалось.";return}
-          item.status.textContent="Устанавливаю… "+(i*3)+" c";
+          compRingText.textContent=Math.floor((Date.now()-started)/1000)+" с";
+          let st;
+          try{st=await compApi(statusUrl,{csrf:compCsrf});misses=0}
+          catch(e){if(++misses>=3)throw e;compText.textContent="Связь прервалась — повторяем опрос…";continue}
+          if(st.phase==="done"){compShow("done",item.row.dataset.label,st.message||"Готово.");item.status.className="component-item-status ok";item.status.textContent=st.message||"Готово.";compRefresh().catch(()=>{});setTimeout(compHide,2600);return}
+          if(st.phase==="failed"){compShow("err",item.row.dataset.label,st.message||"Не удалось.");item.status.className="component-item-status err";item.status.textContent=st.message||"Не удалось.";return}
+          compText.textContent=st.message||"Устанавливаю… "+(i*3)+" c";
         }
         throw new Error("Обновление слишком долго не отвечает. Проверьте статус позже.");
-      }catch(e){item.status.className="component-item-status err";item.status.textContent=e.message}
+      }catch(e){item.status.className="component-item-status err";item.status.textContent=e.message;compShow("err",item.row.dataset.label,e.message)}
       finally{item.btn.disabled=false}
     })
   })
@@ -4218,7 +4231,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.21
+Description=Onyx Panel 1.8.22
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4774,9 +4787,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.21 UPDATED"
+echo "          Onyx Panel 1.8.22 UPDATED"
 else
-echo "         Onyx Panel 1.8.21 IS READY"
+echo "         Onyx Panel 1.8.22 IS READY"
 fi
 echo "============================================================"
 echo

@@ -109,6 +109,24 @@ def _tags(component):
     spec = SPECS[component]
     if spec.get("mode") == "refresh":
         return ["refresh"]
+    if component == "openflux":
+        # Mobile-only releases (no openflux-linux-amd64 asset) cannot be
+        # installed — offer only tags whose release ships the server binary.
+        api = spec["repo"][:-4] + "/releases?per_page=30" if spec["repo"].endswith(".git") else spec["repo"] + "/releases?per_page=30"
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        result = _run(["curl", "-fsSL", "--connect-timeout", "20", "--max-time", "40", api],
+                      timeout=60, env=env)
+        if result.returncode == 0:
+            try:
+                releases = json.loads(result.stdout)
+            except ValueError:
+                releases = None
+            if isinstance(releases, list):
+                tags = [str(item.get("tag_name", "")) for item in releases
+                        if re.fullmatch(r"v\d+(?:\.\d+){1,3}", str(item.get("tag_name", "")))
+                        and any(a.get("name") == "openflux-linux-amd64" for a in (item.get("assets") or []))]
+                return sorted(tags, key=_version_tuple, reverse=True)[:30]
+        # API unavailable — fall back to the plain tag list below.
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     result = _run(["git", "ls-remote", "--tags", "--refs", spec["repo"], "v[0-9]*"],
                   timeout=25, env=env)
@@ -166,7 +184,7 @@ def _download(url, destination):
     result = _run(["curl", "-fL", "--retry", "3", "--retry-all-errors", "--connect-timeout", "20",
                    "--max-time", "300", "-o", str(destination), url], timeout=360)
     if result.returncode or not destination.is_file() or destination.stat().st_size < 100000:
-        raise RuntimeError("Не удалось скачать выбранный релиз.")
+        raise RuntimeError("Не удалось скачать выбранный релиз. Возможно, в нём нет сборки для Linux — попробуйте другую версию.")
 
 
 def _safe_extract_sources(archive, destination, expected_prefix):
