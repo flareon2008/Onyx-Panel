@@ -108,7 +108,8 @@ def _current(component):
 def _openflux_releases():
     """(suitable, unsuitable) OpenFlux tags from the GitHub releases API."""
     repo = SPECS["openflux"]["repo"]
-    api = (repo[:-4] if repo.endswith(".git") else repo) + "/releases?per_page=30"
+    repo_path = repo.replace("https://github.com/", "").removesuffix(".git")
+    api = "https://api.github.com/repos/" + repo_path + "/releases?per_page=30"
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     result = _run(["curl", "-fsSL", "--connect-timeout", "20", "--max-time", "40", api],
                   timeout=60, env=env)
