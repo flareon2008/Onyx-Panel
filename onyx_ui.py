@@ -49,6 +49,7 @@ def icon(name):
              'gitlab': '<path d="m3 10 3-7 3 7h6l3-7 3 7-3 9-6 3-6-3z"/>',
              'youtube': '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z"/>',
              'menu': '<path d="M4 7h16M4 12h16M4 17h16"/>',
+             'bell': '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
              'plus': '<path d="M12 5v14M5 12h14"/>'}
     return '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths.get(name, paths['grid'])+'</svg>'
 
@@ -75,6 +76,7 @@ dialog{padding:25px;width:min(570px,calc(100vw - 32px));max-height:90vh;max-heig
 @media(max-width:1150px){.app{grid-template-columns:192px minmax(0,1fr);padding:10px;gap:8px}main{padding:24px 18px}.brand{gap:8px}.brand b{font-size:11px}.brand img{width:36px;height:36px}.dashboard-grid{grid-template-columns:minmax(0,1.5fr) minmax(245px,1fr)}.clients-summary{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:18px}.client-stat:nth-child(3){border-right:0}.resource-grid{grid-template-columns:1fr 1fr}.graph-speeds{gap:20px}.graph-speeds b{font-size:22px}.preset-grid{grid-template-columns:1fr 1fr}.client-glance{grid-template-columns:1fr 1fr auto}.client-glance .badge{display:none}}
 @media(max-width:900px){.dashboard-grid,.two-col.equal{grid-template-columns:1fr}.overview-stats{grid-template-columns:1fr 1fr}.graph-card{margin-bottom:0}.graph-speeds b{font-size:27px}.clients-toolbar select{max-width:100%}.login-story{padding:30px}.login-story h2{font-size:34px}.signin{padding:35px 28px}}
 @media(max-width:700px){.app{display:block;height:auto;padding:8px}.sidebar{padding:14px;border-radius:16px;overflow:visible}.brand{padding:0 50px 13px 2px}.brand b{font-size:12px}.brand img{width:37px;height:37px}.brand-tools{position:absolute;right:25px;top:24px;padding:0;gap:5px}.brand-tools button{width:34px;height:34px;padding:7px}.brand-tools button span{display:none}.brand-tools .mobile-caption{display:none}.nav{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.nav a{padding:9px 4px;font-size:11px;gap:6px;justify-content:center}.nav .ico{width:15px}.side-footer{display:flex;justify-content:space-between;align-items:center;padding-top:10px}.side-footer .logout{font-size:10px;padding:4px 6px;gap:5px}.social{margin:0;padding:0;border:0;gap:14px}.social a{font-size:9px}.social .ico{width:12px}.workspace{overflow:visible}main{padding:23px 5px 35px}.page-head{align-items:flex-start;gap:12px;margin-bottom:21px}.page-head h1{font-size:30px}.page-head p{font-size:12px}.page-head>button{font-size:11px;padding:10px;max-width:145px}.eyebrow{font-size:9px}.card{padding:18px}.graph-speeds{gap:20px}.graph-speeds b{font-size:23px}.chart-wrap{height:210px}.resource{padding:15px}.resource-head b{font-size:17px}.resource-head strong{font-size:11px}.overview-stat{padding:10px 14px}.overview-stat b{font-size:24px}.client-glance{grid-template-columns:minmax(0,1fr) auto;gap:9px}.client-glance .pills{display:none}.client-glance .btn{grid-column:1/-1;justify-self:start}.clients-summary{padding:16px 0;row-gap:16px;border-radius:15px}.client-stat{padding:0 11px}.client-stat b{font-size:20px}.client-stat span{font-size:9px}.clients-toolbar{padding:12px;gap:8px}.search-field{flex-basis:100%}.clients-toolbar select{flex:1 1 100%;font-size:12px;min-width:0;width:100%;padding-right:28px}.clients-table{display:block;min-width:0}.clients-table thead{display:none}.clients-table tbody{display:grid;gap:12px;padding:12px}.clients-table tr{position:relative;display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:13px;padding:12px;gap:10px;background:var(--input)}.clients-table td{display:block;padding:0;border:0;min-width:0}.clients-table td:before{content:attr(data-label);display:block;color:var(--muted);font-size:9px;margin-bottom:4px}.clients-table .select-col{position:absolute;right:12px;top:14px;width:20px}.clients-table .client-name{grid-column:1/-1;max-width:none;padding-right:28px}.client-name strong{font-size:15px}.clients-table .state-col{position:static;grid-area:2/2;justify-self:end;align-self:center}.clients-table .state-col:before{display:none}.clients-table .activity-col{grid-area:2/1;min-height:26px;align-self:center}.clients-table .activity-col:before{display:none}.clients-table .protocol-col{max-width:none}.traffic-cell{min-width:0}.clients-table .actions-col{grid-column:1/-1;border-top:1px solid var(--line);padding-top:9px}.clients-table .actions-col:before{display:none}.row-actions{justify-content:flex-end;gap:9px}.row-actions .icon-btn{width:35px;height:33px;border:1px solid var(--line)}.clients-table tr:last-child td{border:0}.bulk-bar{padding:12px}.form-grid{grid-template-columns:1fr}.account-head{flex-wrap:wrap}.account-metrics{gap:15px}.device{flex-wrap:wrap}.preview-top{padding:12px}.preview-stage{padding:10px;height:65dvh}.preview-dialog{width:calc(100vw - 16px)}.editor-actions{align-items:stretch;flex-direction:column}.preset-grid{gap:8px}.preset{padding:13px}.preset button{padding:9px}.login-page{padding:80px 18px 30px}.login-shell{grid-template-columns:1fr;max-width:420px}.login-story{padding:25px;min-height:0;gap:20px}.login-story h2{font-size:27px}.login-story p,.login-story>small{display:none}.login-story .eyebrow{display:none}.signin{padding:28px}.login-theme{top:18px;right:18px}}
+.bell-wrap{position:relative}.bell-btn{position:relative}.bell-count{position:absolute;top:-6px;right:-7px;min-width:16px;height:16px;padding:0 4px;display:grid;place-items:center;border-radius:8px;background:var(--accent);color:var(--on-accent);font:600 9px/1 ui-monospace,monospace}.bell-menu{display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);width:380px;max-height:min(70dvh,560px)}.bell-menu[hidden]{display:none}.bell-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line);flex:0 0 auto}.bell-head b{font-size:12px}.bell-head button{padding:6px 10px;font-size:10px;background:transparent;border-color:transparent;color:var(--muted)}.bell-head button:hover{color:var(--red);border-color:var(--red)}.bell-list{overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}.bell-item{padding:15px 16px;border-bottom:1px solid var(--line)}.bell-item:last-child{border-bottom:0}.bell-item.fresh{background:var(--tint)}.bell-item-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.bell-item-head b{font-size:12px}.bell-item-head small{font:9px ui-monospace,monospace;color:var(--muted);white-space:nowrap}.bell-item p{margin:8px 0 0;font-size:11px;color:var(--muted);line-height:1.6}.bell-item .btn,.bell-item button{margin-top:11px;padding:8px 13px;font-size:11px}.bell-changes{margin:9px 0 0;padding:0;list-style:none;display:grid;gap:6px}.bell-changes li{position:relative;padding-left:14px;font-size:11px;line-height:1.55;color:var(--muted);overflow-wrap:anywhere}.bell-changes li:before{content:"";position:absolute;left:2px;top:7px;width:5px;height:5px;border-radius:2px;background:var(--accent)}.bell-link{display:inline-block;margin-top:10px;font-size:10px}.bell-empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:11px;line-height:1.6}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 '''
 
@@ -371,6 +373,13 @@ def restart_buttons(path, csrf):
             f'<button type="button" class="quiet" data-service-restart="modules" data-url="{esc(path)}/service-restart" data-csrf="{esc(csrf)}" aria-label="Перезапустить модули" title="Перезапустить модули — Xray, релей, MTProxy">{icon("refresh")}</button>')
 
 
+def bell_button(path, csrf, role='admin'):
+    """Notifications bell: new versions and post-update changelogs."""
+    if not csrf or role != 'admin': return ''
+    return (f'<div class="bell-wrap"><button type="button" class="quiet bell-btn" data-bell aria-label="Уведомления" title="Уведомления — версии и изменения">{icon("bell")}<span class="bell-count" data-bell-count hidden></span></button>'
+            f'<div class="bell-menu" data-bell-menu hidden><div class="bell-head"><b>Уведомления</b><button type="button" class="quiet" data-bell-clear>Очистить все</button></div><div class="bell-list" data-bell-list></div></div></div>')
+
+
 # Command palette: one overlay for pages, quick actions and client search.
 # Pure frontend — client names arrive from /clients-state on first open.
 PALETTE_JS='''<script>
@@ -405,13 +414,76 @@ box.addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(!b)retu
 })();
 </script>'''
 
+# Appbar bell: server-side version notifications ("available" with an update
+# button, changelog after a finished update) plus "clear all". Anchored with
+# position:fixed so no scrolling container can clip the panel.
+BELL_JS='''<script>
+(()=>{const PATH=@@PATH@@,CSRF='@@CSRF@@';
+const btn=document.querySelector('[data-bell]');if(!btn)return;
+const menu=btn.parentElement.querySelector('[data-bell-menu]'),list=menu.querySelector('[data-bell-list]'),count=btn.querySelector('[data-bell-count]');
+let items=[],unread=0,open=false,watching=false;
+const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=ts=>{try{return new Date(ts*1000).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}catch(e){return ''}};
+const short=v=>String(v||'').replace(/^v/,'');
+function badge(){count.hidden=unread<1;count.textContent=unread>99?'99+':unread}
+function itemHTML(it){
+  const fresh=it.read?'':' fresh';
+  if(it.kind==='available'){
+    return '<div class="bell-item'+fresh+'"><div class="bell-item-head"><b>Доступна новая версия '+esc(short(it.version))+'</b><small>'+esc(fmt(it.created))+'</small></div><p>Установлена '+esc(short(it.current))+'. Перед заменой панель создаст резервную копию; подключения кратко прервутся.</p><button type="button" class="primary" data-bell-update="'+esc(it.version)+'">Обновить</button></div>'}
+  if(it.kind==='changelog'){
+    const rows=(it.changes||[]).map(s=>'<li>'+esc(s)+'</li>').join('');
+    const link=it.link?'<a class="bell-link" target="_blank" rel="noopener" href="'+esc(it.link)+'">Все изменения релиза на GitHub</a>':'';
+    return '<div class="bell-item'+fresh+'"><div class="bell-item-head"><b>Onyx Panel '+esc(short(it.version))+' установлена</b><small>'+esc(fmt(it.created))+'</small></div>'+(rows?'<ul class="bell-changes">'+rows+'</ul>':'<p>Список изменений не загрузился — подробности в релизе на GitHub.</p>')+link+'</div>'}
+  return ''}
+function render(){
+  if(!items.length){list.innerHTML='<p class="bell-empty">Пока нет уведомлений. Здесь появится информация о новых версиях панели и список изменений после обновления.</p>';return}
+  list.innerHTML=items.map(itemHTML).join('')}
+async function load(){try{const r=await fetch(PATH+'/notifications',{cache:'no-store'});if(!r.ok||r.redirected)return;const d=await r.json();items=(Array.isArray(d.items)?d.items.slice():[]).reverse();unread=Number(d.unread)||0;badge();if(open)render()}catch(e){}}
+function position(){const r=btn.getBoundingClientRect(),w=Math.min(380,innerWidth-24);let left=r.right-w;if(left<12)left=12;menu.style.position='fixed';menu.style.left=left+'px';menu.style.right='auto';menu.style.top=(r.bottom+9)+'px';menu.style.width=w+'px'}
+function markRead(){if(unread<1)return;unread=0;badge();items.forEach(i=>i.read=true);if(open)render();fetch(PATH+'/notifications-read',{method:'POST',body:new URLSearchParams({csrf:CSRF})}).catch(()=>{})}
+function setOpen(state){if(state===open)return;open=state;menu.hidden=!state;if(state){position();load().then(markRead)}}
+btn.addEventListener('click',e=>{e.stopPropagation();setOpen(!open)});
+document.addEventListener('click',e=>{if(open&&!e.target.closest('.bell-wrap'))setOpen(false)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&open)setOpen(false)});
+addEventListener('resize',()=>{if(open)position()});
+const workspace=btn.closest('.workspace');if(workspace)workspace.addEventListener('scroll',()=>{if(open)position()},{passive:true});
+function watch(){if(watching)return;watching=true;let down=false;
+  const tick=setInterval(async()=>{let d=null;
+    try{const r=await fetch(PATH+'/update-status',{cache:'no-store'});if(r.ok&&!r.redirected)d=await r.json()}catch(e){}
+    if(!d){down=true;return}
+    if(down&&['queued','running'].includes(d.phase)){down=false;return}
+    if(['queued','running'].includes(d.phase))return;
+    clearInterval(tick);watching=false;
+    if(d.phase==='done')setTimeout(()=>location.reload(),1200);
+    else if(d.phase==='failed'||d.phase==='interrupted')onyxToast(d.message||'Обновление завершилось ошибкой.','err');
+  },5000)}
+list.addEventListener('click',async e=>{
+  if(e.target.closest('[data-bell-clear]')){
+    try{await fetch(PATH+'/notifications-clear',{method:'POST',body:new URLSearchParams({csrf:CSRF})})}catch(err){}
+    items=[];unread=0;badge();render();return}
+  const upd=e.target.closest('[data-bell-update]');
+  if(!upd||upd.disabled)return;
+  const target=upd.dataset.bellUpdate;
+  if(!(await onyxConfirm('Установить версию '+short(target)+'? Будет создана резервная копия. Панель и подключения могут временно прерваться.',{title:'Установка обновления',ok:'Обновить'})))return;
+  upd.disabled=true;
+  try{
+    const r=await fetch(PATH+'/update-start',{method:'POST',body:new URLSearchParams({csrf:CSRF,target})});
+    if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');
+    const d=await r.json();if(!r.ok)throw new Error(d.message||'Не удалось запустить обновление.');
+    setOpen(false);onyxToast('Обновление запущено. Панель перезапустится через несколько минут.','ok');watch();
+  }catch(err){onyxToast(err.message||'Ошибка обновления.','err');upd.disabled=false}
+});
+load();setInterval(load,30000);
+})();
+</script>'''
+
 
 def page_layout(title, body, path, active, domain, csrf='', role='admin'):
     links = ''.join(f'<a class="{"active" if key==active else ""}" href="{esc(path)}/{key}">{icon(glyph)}{label}</a>' for key, label, glyph in [('dashboard','Дашборд','grid'),('users','Пользователи','users'),('nodes','Ноды','nodes'),('cascade','Каскад','cascade'),('routing','Маршрутизация','route'),('updates','Обновления','refresh'),('settings','Настройки','settings')])
     social = ''
     banner = f'''<aside id="releaseBanner" class="release-banner" role="status" hidden><span class="release-banner-mark">{icon('refresh')}</span><div class="release-banner-copy"><b>Доступна новая версия Onyx Panel</b><small>Обновление можно установить с автоматической резервной копией</small></div><span id="releaseBannerVersion" class="release-banner-version"></span><div class="release-banner-actions"><a class="btn primary" href="{esc(path)}/updates">Посмотреть</a><button type="button" id="releaseBannerClose" class="release-banner-close" aria-label="Скрыть уведомление">×</button></div></aside>'''
     banner_script = f'''<script>(()=>{{const banner=document.getElementById('releaseBanner'),version=document.getElementById('releaseBannerVersion'),close=document.getElementById('releaseBannerClose');if(!banner)return;function dismissed(v){{try{{return localStorage.getItem('onyx-release-banner:'+v)==='1'}}catch(e){{return false}}}}function show(d){{if(!d||!d.available||!d.latest||dismissed(d.latest)){{banner.hidden=true;return}}banner.dataset.version=d.latest;version.textContent=(d.current||'—')+' → '+d.latest;banner.hidden=false}}async function check(){{try{{const r=await fetch('{esc(path)}/update-status',{{cache:'no-store'}});if(r.ok&&!r.redirected)show(await r.json())}}catch(e){{}}}}close.addEventListener('click',()=>{{const v=banner.dataset.version;if(v)try{{localStorage.setItem('onyx-release-banner:'+v,'1')}}catch(e){{}}banner.hidden=true}});window.addEventListener('onyx-update-status',e=>show(e.detail));check();setInterval(check,30000)}})();</script>'''
-    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body data-role="{esc(role)}"><div class="app"><div class="workspace"><header class="appbar"><div class="appbar-left"><a class="mini-brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel"><img src="{esc(path)}/__logo" alt="" width="38" height="38"></a><div class="host"><i></i>{esc(domain)}</div></div><nav class="topnav" id="topnav" aria-label="Разделы панели">{links}</nav><div class="appbar-tools">{theme_button()}{restart_buttons(path, csrf)}{social}<a class="logout" href="{esc(path)}/logout" aria-label="Выйти">{icon('logout')}<span>Выйти</span></a><button type="button" class="burger" id="navBurger" aria-expanded="false" aria-controls="topnav" aria-label="Открыть меню">{icon('menu')}</button></div></header>{banner}<main>{body}</main></div></div><dialog id="paletteDialog" class="palette-dialog" aria-label="Командная палитра"><div class="palette-box"><input id="paletteInput" placeholder="Поиск: разделы, клиенты, действия…" autocomplete="off" spellcheck="false"><div id="paletteResults" class="palette-results" role="listbox"></div><div class="palette-hint">Ctrl+K — открыть · ↑↓ — выбрать · Enter — перейти · Esc — закрыть</div></div></dialog>{COMMON_JS}{PALETTE_JS.replace('@@PATH@@',json.dumps(path))}{banner_script}</body></html>'''
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101318"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/png" href="{esc(path)}/__logo">{THEME_INIT}<style>{CSS}</style></head><body data-role="{esc(role)}"><div class="app"><div class="workspace"><header class="appbar"><div class="appbar-left"><a class="mini-brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel"><img src="{esc(path)}/__logo" alt="" width="38" height="38"></a><div class="host"><i></i>{esc(domain)}</div></div><nav class="topnav" id="topnav" aria-label="Разделы панели">{links}</nav><div class="appbar-tools">{theme_button()}{restart_buttons(path, csrf)}{bell_button(path, csrf, role)}{social}<a class="logout" href="{esc(path)}/logout" aria-label="Выйти">{icon('logout')}<span>Выйти</span></a><button type="button" class="burger" id="navBurger" aria-expanded="false" aria-controls="topnav" aria-label="Открыть меню">{icon('menu')}</button></div></header>{banner}<main>{body}</main></div></div><dialog id="paletteDialog" class="palette-dialog" aria-label="Командная палитра"><div class="palette-box"><input id="paletteInput" placeholder="Поиск: разделы, клиенты, действия…" autocomplete="off" spellcheck="false"><div id="paletteResults" class="palette-results" role="listbox"></div><div class="palette-hint">Ctrl+K — открыть · ↑↓ — выбрать · Enter — перейти · Esc — закрыть</div></div></dialog>{COMMON_JS}{PALETTE_JS.replace('@@PATH@@',json.dumps(path))}{BELL_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',esc(csrf))}{banner_script}</body></html>'''
 
 
 def login_ui(path, totp=False):

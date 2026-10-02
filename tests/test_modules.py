@@ -99,4 +99,67 @@ res = onyx_cascade.speedtest({'uuid': '0' * 32, 'address': 'example.com', 'port'
                              xray_bin='/nonexistent/xray')
 assert not res['ok'] and res['message'], res
 print('SPEEDTEST OK')
+
+# ---- update bell notifications: temp paths, no network, no systemctl
+import onyx_update
+from pathlib import Path
+upd_tmp = Path(tempfile.mkdtemp())
+onyx_update.ROOT = upd_tmp
+onyx_update.STATUS = upd_tmp / 'status.json'
+onyx_update.NOTES = upd_tmp / 'notifications.json'
+onyx_update.VERSION = upd_tmp / 'version'
+onyx_update.VERSION.write_text('1.6.0', encoding='ascii')
+onyx_update.REPO = 'https://github.com/xCodeOn/Onyx-Panel.git'
+
+# release markdown -> plain lines
+assert onyx_update.parse_notes('## Изменения\n\n- fix a (abc1234)\n\n* feat b (def5678)\n# Заголовок\nтекст без маркера') == \
+    ['fix a (abc1234)', 'feat b (def5678)', 'текст без маркера']
+assert onyx_update.parse_notes('') == []
+assert onyx_update.repo_slug() == 'xCodeOn/Onyx-Panel'
+onyx_update.REPO = 'https://gitlab.com/x/panel.git'
+assert onyx_update.repo_slug() == ''
+onyx_update.REPO = 'https://github.com/xCodeOn/Onyx-Panel.git'
+
+# add/dedupe/read/clear
+onyx_update.add_note('available', 'v1.7.0')
+onyx_update.add_note('available', 'v1.7.0')          # dedupe by (kind, version)
+assert len(onyx_update.load_notes()) == 1
+assert onyx_update.notes_public()['unread'] == 1
+onyx_update.mark_notes_read()
+assert onyx_update.notes_public()['unread'] == 0
+onyx_update.add_note('available', 'v1.7.0')          # re-check keeps read flag
+assert onyx_update.load_notes()[0]['read'] is True
+assert onyx_update.load_notes()[0]['current'] == '1.6.0'
+onyx_update.clear_notes()
+assert onyx_update.load_notes() == []
+
+# prune: "available" notes for installed versions disappear, others stay
+onyx_update.add_note('available', 'v1.7.0')
+onyx_update.add_note('changelog', 'v1.6.9')
+onyx_update.prune_available('1.7.0')
+kinds = sorted(item['kind'] for item in onyx_update.load_notes())
+assert kinds == ['changelog'], kinds
+onyx_update.clear_notes()
+
+# finished update -> changelog note, available note pruned, announced marker set
+onyx_update.VERSION.write_text('1.7.0', encoding='ascii')
+onyx_update.add_note('available', 'v1.7.0')
+onyx_update.atomic_json(onyx_update.STATUS, {'phase': 'done', 'target': 'v1.7.0'})
+onyx_update.release_notes = lambda tag: (['Новая функция колокольчика (ab12cd3)'], 'https://github.com/xCodeOn/Onyx-Panel/releases/tag/v1.7.0')
+status = onyx_update.get_status()
+notes = onyx_update.load_notes()
+assert status['announced'] == 'v1.7.0', status
+assert [n['kind'] for n in notes] == ['changelog'], notes
+assert notes[0]['version'] == 'v1.7.0' and notes[0]['changes'] == ['Новая функция колокольчика (ab12cd3)']
+assert notes[0]['link'].endswith('/releases/tag/v1.7.0')
+assert onyx_update.get_status()['announced'] == 'v1.7.0'      # announced only once
+assert len(notes) == 1
+
+# update finished but panel runs a different version -> no announcement
+onyx_update.clear_notes()
+onyx_update.atomic_json(onyx_update.STATUS, {'phase': 'done', 'target': 'v9.9.9'})
+onyx_update.get_status()
+assert onyx_update.load_notes() == []
+onyx_update.clear_notes()
+print('UPDATE NOTIFICATIONS OK')
 print('ALL MODULE TESTS PASSED')

@@ -10,6 +10,7 @@ from onyx_metrics import atomic_json, read_state
 
 ROOT = Path('/var/lib/onyx-panel-update')
 STATUS = ROOT / 'status.json'
+NOTES = ROOT / 'notifications.json'
 VERSION = Path('/etc/onyx-panel/version')
 UNIT = 'onyx-panel-web-update.service'
 # Onyx Panel ships self-contained: the updater normally reinstalls from the
@@ -80,7 +81,118 @@ def get_status():
     data['current'] = current_version()
     data['available'] = newer(data.get('latest', ''), data['current'])
     data['can_install'] = bool(data.get('releases'))
+    announce_finished(data)
     return data
+
+
+# ---- Bell notifications -----------------------------------------------------
+# The appbar bell keeps version events on disk: an "available" note appears
+# when check_release finds a newer published tag; once an update finishes and
+# the panel is back with the new code, the note is replaced by the release
+# changelog. Notes survive restarts and are wiped only by "Очистить все".
+
+MAX_NOTES = 50
+
+
+def load_notes():
+    items = read_state(NOTES).get('items')
+    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+
+def save_notes(items):
+    atomic_json(NOTES, {'items': items[-MAX_NOTES:]})
+
+
+def notes_public():
+    items = load_notes()
+    return {'items': items, 'unread': sum(1 for item in items if not item.get('read'))}
+
+
+def add_note(kind, version, changes=None, link=''):
+    """Append or refresh an event; one note per (kind, version), read flag kept."""
+    items = load_notes()
+    record = {'kind': kind, 'version': version, 'created': int(time.time()), 'read': False,
+              'changes': [str(change) for change in (changes or [])], 'link': str(link or ''),
+              'current': current_version()}
+    for index, item in enumerate(items):
+        if item.get('kind') == kind and item.get('version') == version:
+            record['read'] = bool(item.get('read'))
+            record['created'] = item.get('created', record['created'])
+            items[index] = record
+            break
+    else:
+        items.append(record)
+    save_notes(items)
+    return record
+
+
+def mark_notes_read():
+    items = load_notes()
+    for item in items: item['read'] = True
+    save_notes(items)
+
+
+def clear_notes():
+    save_notes([])
+
+
+def prune_available(current=''):
+    """Drop "available" notes for versions that are already installed."""
+    current = current or current_version()
+    save_notes([item for item in load_notes()
+                if not (item.get('kind') == 'available' and not newer(item.get('version', ''), current))])
+
+
+def repo_slug():
+    """owner/repo for GitHub API calls; empty for non-GitHub repositories."""
+    match = re.fullmatch(r'https://github\.com/([^/\s]+)/([^/\s]+?)(?:\.git)?/?', str(REPO).strip())
+    return f'{match.group(1)}/{match.group(2)}' if match else ''
+
+
+def parse_notes(body):
+    """Release markdown -> plain lines: drop headers, keep bullet items."""
+    items = []
+    for line in str(body or '').splitlines():
+        text = line.strip()
+        if not text or text.startswith('#'): continue
+        if text.startswith(('- ', '* ')): text = text[2:].strip()
+        if text: items.append(text[:500])
+        if len(items) >= 50: break
+    return items
+
+
+def release_notes(tag):
+    """Changelog lines and the release URL from the GitHub release of `tag`."""
+    slug = repo_slug()
+    if not slug: return [], ''
+    try:
+        import urllib.request
+        request = urllib.request.Request(
+            f'https://api.github.com/repos/{slug}/releases/tags/{tag}',
+            headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Onyx-Panel'})
+        with urllib.request.urlopen(request, timeout=12) as response:
+            data = json.load(response)
+    except Exception:
+        return [], ''
+    link = str(data.get('html_url') or f'https://github.com/{slug}/releases/tag/{tag}')
+    return parse_notes(data.get('body')), link
+
+
+def announce_finished(data):
+    """A finished update becomes one bell note with the release changelog."""
+    target = str(data.get('target', '') or '')
+    if data.get('phase') != 'done' or not target or data.get('announced') == target: return
+    if target.lstrip('v') != current_version().lstrip('v'):
+        # The panel came back on a different version (rollback or manual fix):
+        # nothing to announce, but stop re-checking this target forever.
+        data['announced'] = target
+        atomic_json(STATUS, data)
+        return
+    changes, link = release_notes(target)
+    add_note('changelog', target, changes=changes, link=link)
+    prune_available()
+    data['announced'] = target
+    atomic_json(STATUS, data)
 
 
 def _lock(blocking=False):
@@ -120,6 +232,8 @@ def check_release():
                 state.update(latest='', releases=[], checked=int(time.time()), phase='checked',
                              message='Внешний источник обновлений не настроен (ONYX_UPDATE_REPOSITORY). '
                                      'Используйте onyx-panel-update из папки пакета Onyx Panel.')
+            prune_available()
+            if newer(latest, current_version()): add_note('available', latest)
             atomic_json(STATUS, state)
             return get_status()
         env = {**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
@@ -143,6 +257,8 @@ def check_release():
             else:
                 tags = tags[:3]
             state.update(latest=latest, releases=tags, checked=int(time.time()), phase='checked', message='Версии загружены.')
+            prune_available()
+            if newer(latest, current_version()): add_note('available', latest)
         except (OSError, subprocess.TimeoutExpired):
             raise ValueError('Не удалось проверить репозиторий. Повторите позже.')
         atomic_json(STATUS, state)
