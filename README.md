@@ -13,7 +13,7 @@ VLESS XHTTP · Hysteria2 · AmneziaWG 2.0/3.1 · MTProto · Telegram Web Proxy �
 </p>
 
 <p align="center">
-  <a href="https://github.com/xCodeOn/Onyx-Panel/releases"><img alt="Версия" src="https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.8.22-65a8dc"></a>
+  <a href="https://github.com/xCodeOn/Onyx-Panel/releases"><img alt="Версия" src="https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.8.23-65a8dc"></a>
   <a href="LICENSE"><img alt="Лицензия" src="https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-58c392"></a>
   <img alt="Платформа" src="https://img.shields.io/badge/Ubuntu%2022.04%2B%20%7C%20Debian%2012%2B-x86__64-8a97ab">
 </p>

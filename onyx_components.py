@@ -226,6 +226,13 @@ def _active_awg_units():
             if line.split() and re.fullmatch(r"onyx-panel-awg(?:-[a-f0-9]{16})?\.service", line.split()[0])]
 
 
+def _active_openflux_units():
+    result = _run(["systemctl", "list-units", "--type=service", "--state=active", "--no-legend",
+                   "onyx-panel-openflux.service"])
+    return [line.split()[0] for line in result.stdout.splitlines()
+            if line.split() and re.fullmatch(r"onyx-panel-openflux\.service", line.split()[0])]
+
+
 def _install(component, tag, directory):
     spec = SPECS[component]
     binary = spec["binary"]
