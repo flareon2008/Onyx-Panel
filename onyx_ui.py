@@ -49,6 +49,7 @@ def icon(name):
              'logout': '<path d="M10 4H4v16h6m4-12 4 4-4 4m-6-4h10"/>',
              'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/>',
              'refresh': '<path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6"/>',
+             'modules': '<rect x="3" y="4" width="18" height="4.6" rx="1.5"/><rect x="3" y="10.7" width="18" height="4.6" rx="1.5"/><rect x="3" y="17.4" width="18" height="4.6" rx="1.5"/><path d="M6.6 6.3h.01M6.6 13h.01M6.6 19.7h.01"/>',
              'chevron-down': '<path d="m6 9 6 6 6-6"/>',
              'chart': '<path d="M3 3v18h18M6 15l4-5 4 3 6-8"/>',
              'link': '<path d="m10 13 4-4m-6 5-2 2a3 3 0 0 0 4 4l3-3m-2-10 3-3a3 3 0 0 1 4 4l-2 2"/>',
@@ -367,8 +368,8 @@ FAVICON_MARK = 'data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%
 
 def restart_buttons(path, csrf):
     if not csrf: return ''
-    return (f'<button type="button" class="nav-button" data-service-restart="panel" data-url="{esc(path)}/service-restart" data-csrf="{esc(csrf)}" data-tip="Перезапустить панель" aria-label="Перезапустить панель">{icon("power")}</button>'
-            f'<button type="button" class="nav-button" data-service-restart="modules" data-url="{esc(path)}/service-restart" data-csrf="{esc(csrf)}" data-tip="Перезапустить модули — Xray, релей, MTProxy" aria-label="Перезапустить модули">{icon("refresh")}</button>')
+    return (f'<button type="button" class="nav-button" data-service-restart="panel" data-url="{esc(path)}/service-restart" data-csrf="{esc(csrf)}" data-tip="Перезапустить панель" aria-label="Перезапустить панель">{icon("refresh")}</button>'
+            f'<button type="button" class="nav-button" data-service-restart="modules" data-url="{esc(path)}/service-restart" data-csrf="{esc(csrf)}" data-tip="Перезапустить модули — Xray, релей, MTProxy" aria-label="Перезапустить модули">{icon("modules")}</button>')
 
 
 def bell_button(path, csrf, role='admin'):
