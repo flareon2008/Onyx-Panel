@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.9.10..."
+    echo "Updating Onyx Panel 1.9.11..."
 else
-    echo "Configuring Onyx Panel 1.9.10..."
+    echo "Configuring Onyx Panel 1.9.11..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2264,6 +2264,26 @@ def purge_remote_profiles_async(subscription,device_id=None):
     threading.Thread(target=purge_remote_profiles,args=(subscription,device_id),
                      name="onyx-node-cleanup",daemon=True).start()
 
+def sync_routing_to_nodes():
+    """Push the panel routing policy to every enabled node: traffic that
+    terminates on a node must follow the same direct and block rules as the
+    panel itself. Runs in a background thread — a node applies its Xray
+    synchronously, which can take tens of seconds. Nodes without the endpoint
+    (panel older than 1.9.11) are skipped with a log line."""
+    data=routing_api.load(ROUTING_FILE)
+    payload={"direct_ips":data.get("direct_ips",[]),"direct_domains":data.get("direct_domains",[]),
+             "ipv4_domains":data.get("ipv4_domains",[]),"block_torrents":bool(data.get("block_torrents"))}
+    try: nodes=node_api.load_nodes(NODES_FILE)
+    except Exception:
+        print("routing sync skipped: registry unreadable",file=sys.stderr,flush=True); return
+    for node in nodes:
+        if not node.get("enabled",True): continue
+        try: node_api.request(node,"POST",node_api.API_PREFIX+"/routing",payload,timeout=90)
+        except node_api.NodeError as exc:
+            print("routing sync to node failed:",node.get("url"),str(exc),file=sys.stderr,flush=True)
+        except Exception as exc:
+            print("routing sync to node failed:",node.get("url"),type(exc).__name__,file=sys.stderr,flush=True)
+
 def federation_names():
     """federation_id -> subscription/device labels with the owning client id."""
     mapping={}
@@ -2641,7 +2661,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.9.10","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.11","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -3163,6 +3183,15 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
                 if path==node_api.API_PREFIX+"/federation/purge":
                     result=ctl_manager_json("federation-purge",{})
                     self.send_json({"ok":True,"deleted":int(result.get("deleted",0))}); return
+                if path==node_api.API_PREFIX+"/routing":
+                    # The controller pushes its routing policy: traffic that
+                    # terminates on this node must follow the same direct and
+                    # block rules as the panel itself.
+                    routing_api.save(ROUTING_FILE,routing_api.normalize(request))
+                    try: ctl("cascade-apply")
+                    except Exception as exc:
+                        self.send_json({"ok":False,"message":"Rules saved, apply failed: "+cascade_detail(exc)[:140]},503); return
+                    self.send_json({"ok":True}); return
                 if path==node_api.API_PREFIX+"/profiles/create":
                     protocol=str(request.get("protocol","")); name=str(request.get("name","")).strip()
                     if protocol not in ("web","mtproto","vless","hysteria","awg20","awg31") or not name or len(name)>80:
@@ -3302,6 +3331,9 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
                     if urlparse(candidate).hostname==DOMAIN:
                         raise node_api.NodeError("Нельзя добавить эту же панель как удалённую ноду.")
                     node_api.add_node(NODES_FILE,form)
+                    # A freshly added node must serve traffic under the same
+                    # routing policy; the push runs after the redirect returns.
+                    threading.Thread(target=sync_routing_to_nodes,name="onyx-routing-sync",daemon=True).start()
                 elif operation=="delete":
                     nodes=node_api.load_nodes(NODES_FILE); uid=form.get("id","")
                     selected=next((n for n in nodes if n.get("id")==uid),None)
@@ -3634,7 +3666,8 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
                 routing_api.save(ROUTING_FILE,data)
                 try:
                     ctl("cascade-apply")
-                    message="Правила сохранены — применяются в фоне…"
+                    threading.Thread(target=sync_routing_to_nodes,name="onyx-routing-sync",daemon=True).start()
+                    message="Правила сохранены — применяются на панели и нодах…"
                 except Exception as exc:
                     raise routing_api.RoutingError("Правила сохранены, но применить не удалось: "+str(exc)[-160:])
                 self.send_json({"ok":True,"message":message}); return
@@ -4459,7 +4492,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.9.10
+Description=Onyx Panel 1.9.11
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -5015,9 +5048,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.9.10 UPDATED"
+echo "          Onyx Panel 1.9.11 UPDATED"
 else
-echo "         Onyx Panel 1.9.10 IS READY"
+echo "         Onyx Panel 1.9.11 IS READY"
 fi
 echo "============================================================"
 echo

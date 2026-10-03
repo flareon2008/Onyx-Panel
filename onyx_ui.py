@@ -1865,7 +1865,7 @@ def _chip_editor(list_key, presets, values, placeholder):
 def routing_ui(routing, path, csrf, domain):
     routing = routing or {}
     torrents_enabled=bool(routing.get('block_torrents'))
-    banner='<p class="note"><b>Прямое соединение</b> означает, что определённый трафик не будет перенаправлен через другой сервер. Правила из этой вкладки проверяются <b>до</b> каскада: совпавший трафик всегда уходит с этого сервера напрямую.</p>'
+    banner='<p class="note"><b>Прямое соединение</b> означает, что определённый трафик не будет перенаправлен через другой сервер. Правила из этой вкладки проверяются <b>до</b> каскада: совпавший трафик всегда уходит с этого сервера напрямую. При сохранении правила автоматически применяются и к подключённым нодам — трафик, который выходит через ноду, следует той же политике.</p>'
     ip_editor=_chip_editor('direct_ips',ROUTING_IP_PRESETS,routing.get('direct_ips',[]),'geoip:cn, 1.2.3.4 или 10.0.0.0/8')
     domain_editor=_chip_editor('direct_domains',ROUTING_DOMAIN_PRESETS,routing.get('direct_domains',[]),'domain:example.com, geosite:cn')
     ipv4_editor=_chip_editor('ipv4_domains',ROUTING_DOMAIN_PRESETS,routing.get('ipv4_domains',[]),'domain:example.com')

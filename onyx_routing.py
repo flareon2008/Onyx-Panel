@@ -30,6 +30,9 @@ class RoutingError(ValueError):
 
 def _clean_entry(value):
     entry = str(value or '').strip()
+    # Typographic dashes survive the input box (e.g. xn—p1ai) but never match
+    # in Xray; normalize them to the ASCII hyphen before validation.
+    entry = entry.replace('\u2013', '-').replace('\u2014', '-').replace('\u2212', '-')
     if not entry:
         return ''
     if len(entry) > MAX_ENTRY_LEN or not ENTRY_RE.match(entry):

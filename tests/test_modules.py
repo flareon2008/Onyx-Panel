@@ -194,6 +194,38 @@ assert onyx_nodes.sync_registry(registry, [merged['aaaa']], [live_a]) is False
 assert [n['id'] for n in onyx_nodes.load_nodes(registry)] == ['bbbb']
 print('NODE REGISTRY EDGE CASES OK')
 
+# ---- routing rules: normalization and Xray merge shape
+import onyx_routing
+# typographic dashes normalize to the ASCII hyphen
+assert onyx_routing._clean_entry('domain:xn\u2014\u2014p1ai') == 'domain:xn--p1ai'
+assert onyx_routing._clean_entry('geoip:ru\u2013test') == 'geoip:ru-test'
+assert onyx_routing._clean_entry('') == '' and onyx_routing._clean_entry('  ') == ''
+for bad in ('a b', 'do"main', 'x' * 121):
+    try:
+        onyx_routing._clean_entry(bad); raise SystemExit('should fail: ' + repr(bad))
+    except onyx_routing.RoutingError:
+        pass
+assert onyx_routing._clean_list(['', '  ', 'domain:ru']) == ['domain:ru']
+try:
+    onyx_routing._clean_list(['domain:ru', 'a b']); raise SystemExit('should fail')
+except onyx_routing.RoutingError:
+    pass
+norm = onyx_routing.normalize({'direct_ips': ['GeoIP:RU', 'geoip:ru', '1.2.3.4', ''],
+                               'direct_domains': ['domain:\u0440\u0444'],
+                               'ipv4_domains': ['domain:example.com'], 'block_torrents': 1})
+assert norm['direct_ips'] == ['GeoIP:RU', '1.2.3.4'] and norm['direct_domains'] == ['domain:\u0440\u0444']
+assert norm['ipv4_domains'] == ['domain:example.com'] and norm['block_torrents'] is True
+outbounds, rules = onyx_routing.xray_additions(norm)
+assert [o['tag'] for o in outbounds] == ['blocked', 'ipv4'], outbounds
+assert [r['outboundTag'] for r in rules] == ['blocked', 'direct', 'direct', 'ipv4'], rules
+assert onyx_routing.xray_additions(onyx_routing.normalize({})) == ([], [])
+routing_tmp = str(Path(tempfile.mkdtemp()) / 'routing.json')
+onyx_routing.save(routing_tmp, norm)
+reloaded = onyx_routing.load(routing_tmp)
+assert reloaded['direct_ips'] == norm['direct_ips'] and reloaded['block_torrents'] is True
+assert onyx_routing.load(routing_tmp + '.missing') == onyx_routing.normalize({})
+print('ROUTING OK')
+
 # ---- Python 3.10 grammar check (Ubuntu 22.04 target): no 3.12+ f-string syntax
 import ast
 import glob
