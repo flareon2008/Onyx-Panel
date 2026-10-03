@@ -267,6 +267,43 @@ onyx_warp.reset(warp_tmp)
 assert not onyx_warp.configured(onyx_warp.load(warp_tmp))
 print('WARP OK')
 
+# ---- Reality: валидация, инбаунд, ссылка
+import onyx_reality
+priv_r, pub_r = onyx_warp.keypair()
+r_tmp = str(Path(tempfile.mkdtemp()) / 'reality.json')
+state = onyx_reality.setup(r_tmp, port=2053, dest='www.wildberries.ru:443')
+assert state['enabled'] is True and state['port'] == 2053
+assert all(onyx_reality.SHORT_ID_RE.match(i) for i in state['short_ids']) and len(state['short_ids']) == 4
+assert state['private_key'] != priv_r                     # каждый setup — новые ключи
+for bad in ({'port': 80, 'dest': 'a.com:443'}, {'port': 2053, 'dest': 'no port'},
+            {'port': 2053, 'dest': 'a.com:443', 'private_key': 'short', 'public_key': pub_r}):
+    try:
+        s2 = dict(state); s2.update(bad)
+        onyx_reality.validate(s2); raise SystemExit('should fail: ' + repr(bad))
+    except onyx_reality.RealityError:
+        pass
+users_r = [{'id': 'aabbccddeeff0011', 'secret': 'S1' * 8, 'protocol': 'vless', 'enabled': True},
+           {'id': 'bbbbccccdddd0000', 'secret': 'S2' * 8, 'protocol': 'vless', 'enabled': False},
+           {'id': 'ccccdddd0000eeee', 'secret': 'S3' * 8, 'protocol': 'hysteria', 'enabled': True}]
+inb = onyx_reality.inbound(state, users_r)
+assert inb['tag'] == 'vless-reality' and inb['port'] == 2053 and len(inb['settings']['clients']) == 1
+assert inb['settings']['clients'][0]['flow'] == 'xtls-rprx-vision'
+assert inb['streamSettings']['realitySettings']['dest'] == 'www.wildberries.ru:443'
+assert onyx_reality.inbound(state, []) is None
+disabled = dict(state, enabled=False)
+assert onyx_reality.inbound(disabled, users_r) is None
+link = onyx_reality.link(state, 'S1' * 8, 'Тест · Reality', host='panel.example.com')
+assert 'security=reality' in link and 'flow=xtls-rprx-vision' in link
+assert '@panel.example.com:2053' in link and 'sni=www.wildberries.ru' in link
+from urllib.parse import urlsplit, parse_qs
+query = parse_qs(urlsplit(link).query)
+assert query['pbk'][0] == state['public_key'] and query['sid'][0] == state['short_ids'][0]
+assert query['fp'][0] == 'chrome' and query['spx'][0] == '/'
+assert onyx_reality.link(disabled, 'S1' * 8, 'x', host='h') == ''
+onyx_reality.reset(r_tmp)
+assert not onyx_reality.enabled(onyx_reality.load(r_tmp))
+print('REALITY OK')
+
 # ---- Python 3.10 grammar check (Ubuntu 22.04 target): no 3.12+ f-string syntax
 import ast
 import glob

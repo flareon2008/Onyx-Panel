@@ -726,7 +726,7 @@ def subscription_card(sub, path, domain, csrf, traffic, compact=False):
     return f'<article class="account" id="account-{esc(sid)}" data-account data-kind="subscription" data-name="{esc(sub["name"].lower())}">{head}{buttons}{details}</article>'
 
 
-def direct_card(user, path, csrf, traffic, proxy_link, compact=False):
+def direct_card(user, path, csrf, traffic, proxy_link, compact=False, reality_link=None):
     uid=user['id']; proto=user.get('protocol','web'); port=int(user.get('backend_port',443))
     label={'web':'WEB Proxy','vless':'VLESS XHTTP','hysteria':'Hysteria2','mtproto':'MTProto','awg20':'AWG 2.0','awg31':'AWG 3.1'}.get(proto,proto)
     total=aggregate([uid],traffic,user.get('enabled',True))
@@ -756,7 +756,13 @@ def direct_card(user, path, csrf, traffic, proxy_link, compact=False):
             value_control=f'<div class="mtproto-access-head"><span>TCP-порт</span><b>{port}</b><small>Открыт панелью в firewall</small></div><div class="mtproto-devices">{"".join(device_rows)}</div>'
         download=f'<a class="btn" href="{esc(path)}/awg-config?{urlencode({"id":uid})}">Скачать .conf</a>' if proto in ('awg20','awg31') else ''
         access_note=(f'{len(device_secrets)} отдельных ключей устройств · Telegram не передаёт серверу HWID' if proto=='mtproto' else 'Отдельное подключение · без ограничения устройств')
-        details=f'<details><summary>Параметры подключения</summary><p class="muted">{access_note}</p>{value_control}<div class="account-actions">{download}{removal}</div>{secret_editor}</details>'
+        reality_row=''
+        if reality_link:
+            reality_row=(f'<label>Reality-ссылка (маскируется под белый список)</label>'
+                         f'<div class="secret-editor"><input class="sub-url" value="{esc(reality_link)}" readonly>'
+                         f'<button type="button" data-copy="{esc(reality_link)}">Копировать</button></div>'
+                         f'<small>Тот же ключ, но TLS-handshake маскируется под белый сайт. Подключение на порт, отличный от 443.</small>')
+        details=f'<details><summary>Параметры подключения</summary><p class="muted">{access_note}</p>{value_control}{reality_row}<div class="account-actions">{download}{removal}</div>{secret_editor}</details>'
     return f'''<article class="account" id="account-{esc(uid)}" data-account data-kind="direct" data-name="{esc(user['name'].lower())}"><div class="account-head"><div class="identity"><div class="avatar">{icon('users')}</div><div><h3>{esc(user['name'])}</h3><div class="pills"><span class="pill">{esc(label)}</span><span class="pill">Отдельная ссылка</span></div></div></div>{badge(total['active'],user.get('enabled',True))}</div><div class="account-metrics"><div><span>Получено</span><b>{size(total['down'])}</b></div><div><span>Отправлено</span><b>{size(total['up'])}</b></div><div><span>Всего</span><b>{size(total['up']+total['down'])}</b></div></div><div class="actions">{buttons}</div>{details}</article>'''
 
 
@@ -864,7 +870,7 @@ def openflux_create_dialog(path, csrf):
     return markup[markup.index('<dialog id="newOpenFlux"'):]
 
 
-def users_ui(subs, profiles, traffic, path, domain, csrf, proxy_link, openflux_profiles=None, expires=None, node_summary=None, warp_ready=False, warp_ids=None):
+def users_ui(subs, profiles, traffic, path, domain, csrf, proxy_link, openflux_profiles=None, expires=None, node_summary=None, warp_ready=False, warp_ids=None, reality_link=None):
     records=client_records(subs,profiles,traffic,domain,proxy_link,expires,node_summary=node_summary,warp_ids=warp_ids if warp_ready else None)
     # The WARP toggle appears only when WARP is configured on the routing tab;
     # web/mtproto/awg traffic does not pass through Xray, so those clients
@@ -902,7 +908,7 @@ def users_ui(subs, profiles, traffic, path, domain, csrf, proxy_link, openflux_p
         share=t['up']/total*100 if total else 0
         split=f'<div class="traffic-split" title="Доля отправки и получения, не лимит"><i class="up" style="width:{share:.2f}%"></i><i class="down" style="width:{100-share if total else 0:.2f}%"></i></div>'
         rows.append(f'''<tr data-client data-id="{sid}" data-kind="{kind}" data-protocols="{esc(' '.join(r['protocols']))}" data-name="{name}" data-enabled="{int(bool(enabled))}" data-active="{int(bool(t['active']))}" data-created="{int(r['created'])}" data-traffic="{int(total)}" data-link="{esc(r['link'])}"><td class="select-col"><input type="checkbox" data-select-client aria-label="Выбрать — {name}" {'disabled' if primary else ''}></td><td class="client-name" data-label="Клиент"><div class="client-identity"><span class="client-initial" aria-hidden="true">{esc(r['name'].strip()[:1].upper() or '•')}</span><div><strong>{name}</strong><small>{'Подписка' if sub else 'Основное подключение' if primary else 'Отдельная ссылка'}</small>{badge(t['active'],enabled)}{exp_pill}</div></div></td><td class="state-col" data-label="Доступ">{state}</td><td class="activity-col" data-label="Активность">{badge(t['active'],enabled)}</td><td class="protocol-col" data-label="Протоколы">{client_protocols(r['protocols'])}{node_pills(r)}</td><td class="traffic-cell" data-label="Трафик"><b>{size(total)}</b><small>↑ {size(t['up'])} · ↓ {size(t['down'])}</small>{split}</td><td class="hwid-cell" data-label="Устройства">{used}<small>{device_hint}</small></td><td class="actions-col" data-label="Действия"><div class="row-actions">{action}</div></td></tr>''')
-        detail=subscription_card(r['source'],path,domain,csrf,traffic) if sub else direct_card(r['source'],path,csrf,traffic,proxy_link)
+        detail=subscription_card(r['source'],path,domain,csrf,traffic) if sub else direct_card(r['source'],path,csrf,traffic,proxy_link,reality_link=(reality_link(r['source']['secret'],name+' · Reality') if (reality_link and r['source'].get('protocol')=='vless') else None))
         detail=detail.replace('<details>','<details open>')
         if not sub and not primary:
             rename=f'<form method="post" action="{esc(path)}/client-action" data-client-action>{hidden(csrf,id=uid,kind=kind,operation="rename")}<label for="rename-{sid}">Имя клиента</label><input id="rename-{sid}" name="name" value="{name}" required maxlength="80"><button style="margin:12px 0" class="primary">Сохранить имя</button><p data-form-status role="status"></p></form>'
@@ -1098,6 +1104,9 @@ dialog{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 
 # Full mobile adaptation: dialogs must always scroll, inputs must not trigger
 # iOS focus zoom, and touch targets stay comfortable on every device.
+CSS += '''.reality-fields{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px;margin-top:4px}.reality-fields input{font:11px ui-monospace,Consolas,monospace}
+'''
+
 CSS += '''.warp-btn.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}.warp-btn.on .ico{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 45%,transparent))}.warp-manual{margin-top:16px}.warp-manual summary{cursor:pointer;color:var(--accent);font-size:12px;width:max-content;padding:2px 0}.warp-manual textarea{margin:12px 0 10px;font:11px ui-monospace,Consolas,monospace}.warp-manual .actions{margin-top:0}
 '''
 
@@ -1868,6 +1877,12 @@ if(sw)sw.addEventListener('click',async()=>{
     if(window.onyxToast)onyxToast(res.message||'Сохранено — применяется в фоне…');}
   catch(e){sw.setAttribute('aria-checked',previous);if(window.onyxToast)onyxToast(e.message,'err')}
   finally{sw.disabled=false}});
+async function rPostReality(operation,extra){const body=new URLSearchParams({csrf:CSRF,operation,...(extra||{})});
+  const r=await fetch(PATH+'/reality-setup',{method:'POST',headers:{'X-Onyx-Async':'1'},body});
+  if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');
+  let res;try{res=await r.json()}catch(e){throw new Error('Панель вернула некорректный ответ.')}
+  if(!r.ok||!res.ok)throw new Error(res.message||'Операция не выполнена.');
+  return res}
 async function warpPost(operation,extra){const body=new URLSearchParams({csrf:CSRF,operation,...(extra||{})});
   const r=await fetch(PATH+'/routing-warp',{method:'POST',headers:{'X-Onyx-Async':'1'},body});
   if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');
@@ -1896,6 +1911,21 @@ if(warpCard){
     try{await warpPost('config',{config:ta.value});location.reload()}
     catch(e){if(window.onyxToast)onyxToast(e.message,'err')}
     finally{apply.disabled=false;apply.innerHTML=old}})}
+const realityCard=document.getElementById('realityCard');
+if(realityCard){
+  realityCard.querySelectorAll('[data-reality-action]').forEach(b=>b.addEventListener('click',async()=>{
+    if(b.disabled)return;
+    const op=b.dataset.realityAction;
+    if(op==='disable'&&window.onyxConfirm&&!(await onyxConfirm('Отключить Reality-вход? Reality-ссылки исчезнут из подписок клиентов.',{danger:true})))return;
+    const extra={};
+    if(op==='enable'||op==='test-mask'){extra.dest=realityCard.querySelector('[data-reality-dest]').value.trim()}
+    if(op==='enable'){extra.port=realityCard.querySelector('[data-reality-port]').value.trim()}
+    b.disabled=true;const old=b.innerHTML;b.textContent='…';
+    try{const res=await rPostReality(op,extra);
+      if(op==='enable'||op==='disable')location.reload();
+      else if(window.onyxToast)onyxToast(res.message||'Готово')}
+    catch(e){if(window.onyxToast)onyxToast(e.message,'err')}
+    finally{b.disabled=false;b.innerHTML=old}}));}
 })();
 </script>'''
 
@@ -1911,10 +1941,14 @@ def _chip_editor(list_key, presets, values, placeholder):
             f'<button type="button" class="routing-add-btn">Добавить</button></div></div>')
 
 
-def routing_ui(routing, path, csrf, domain, warp=None):
+def routing_ui(routing, path, csrf, domain, warp=None, reality=None):
     routing = routing or {}
     torrents_enabled=bool(routing.get('block_torrents'))
     warp = warp or {}
+    reality = reality or {}
+    reality_on=bool(reality.get('enabled'))
+    reality_port=int(reality.get('port') or 2053)
+    reality_dest=str(reality.get('dest') or 'www.wildberries.ru:443')
     warp_ready=bool(warp.get('private_key'))
     warp_exit_ip=str(warp.get('exit_ip','') or '')
     checked=int(warp.get('checked_at') or 0)
@@ -1943,6 +1977,18 @@ def routing_ui(routing, path, csrf, domain, warp=None):
 <div class="actions">{warp_buttons}</div>
 <details class="warp-manual"><summary>Вставить WireGuard-конфиг вручную (wgcf)</summary><textarea data-warp-config rows="5" spellcheck="false" autocomplete="off" placeholder="[Interface]&#10;PrivateKey = …&#10;Address = 172.16.0.2/32&#10;&#10;[Peer]&#10;PublicKey = …&#10;Endpoint = engage.cloudflareclient.com:2408"></textarea><div class="actions"><button type="button" class="primary" data-warp-config-apply>Применить конфиг</button></div></details>
 <p class="muted" style="font-size:10.5px;margin:12px 0 0">Включение по клиентам — кнопкой-облаком в списке «Клиенты» (VLESS и Hysteria2). Сила правил: блок торрентов и прямые списки → WARP → каскады. Действует для подключений к этой панели; на нодах WARP не применяется.</p>
+</section>
+<section class="card" id="realityCard">
+<div class="card-title"><div><h2>Reality-вход</h2><p>VLESS поверх TLS белого сайта — для сетей с белыми списками</p></div><span class="pill" data-reality-pill>{'включён · порт '+str(reality_port) if reality_on else 'выключен'}</span></div>
+<p class="note" data-reality-status role="status">{('Маска: '+esc(reality_dest)+' · Reality-ссылки добавлены в подписки vless-клиентов.') if reality_on else 'Укажите порт и сайт-маску из белого списка оператора, затем включите. Ссылки появятся в подписках автоматически.'}</p>
+<div class="reality-fields"><div><label>Порт</label><input data-reality-port value="{reality_port}" inputmode="numeric" autocomplete="off"></div><div><label>Сайт-маска (dest)</label><input data-reality-dest value="{esc(reality_dest)}" spellcheck="false" autocomplete="off" placeholder="www.wildberries.ru:443"></div></div>
+<div class="actions">
+<button type="button" class="{'primary' if not reality_on else ''}" data-reality-action="enable">{icon('warp' if False else 'shield') if False else ''}{'Включить' if not reality_on else 'Включить заново (новые ключи)'}</button>
+<button type="button" data-reality-action="test-mask">Проверить маску</button>
+{'<button type="button" data-reality-action="selftest">Проверить подключение</button>' if reality_on else ''}
+{'<button type="button" class="danger" data-reality-action="disable">Отключить</button>' if reality_on else ''}
+</div>
+<p class="muted" style="font-size:10.5px;margin:12px 0 0">Сила правил: блок торрентов и прямые списки → WARP → каскады — Reality-трафик идёт через те же правила. Действует для подключений к этой панели; на нодах не создаётся. Смена маски или повторное включение генерирует новые ключи — старые ссылки клиентов обновятся после обновления подписки.</p>
 </section>
 <section class="card"><div class="card-title"><h2>Блокировки</h2></div><div class="routing-row" style="border-top:0;padding-top:4px"><div><h3>Заблокировать Торренты</h3><small>BitTorrent-трафик распознаётся сниффером Xray и блокируется. Работает для VLESS и Hysteria2.</small></div><div class="routing-switch-row"><button type="button" class="access-switch" data-routing-torrent role="switch" aria-label="Заблокировать торренты" aria-checked="{str(torrents_enabled).lower()}" title="{'Выключить блокировку торрентов' if torrents_enabled else 'Включить блокировку торрентов'}"></button></div></div></section>{ROUTING_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',json.dumps(csrf))}'''
 

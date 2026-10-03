@@ -112,7 +112,7 @@ fi
 MTPROTO_HOST="${MTPROTO_HOST:-$DOMAIN}"
 [[ -s "$PRIMARY_SECRET" ]] || die "Primary install-time secret not found."
 [[ -s "$LOGO_SOURCE" ]] || die "Panel logo file is missing: onyx-logo.png"
-for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_warp.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
+for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_warp.py onyx_reality.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
     [[ -s "$BASE/$module" ]] || die "Missing panel module: $module; extract the complete archive."
 done
 FLAG_ARCHIVE="$BASE/onyx-panel/flags.tar.gz"
@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.9.15..."
+    echo "Updating Onyx Panel 1.9.16..."
 else
-    echo "Configuring Onyx Panel 1.9.15..."
+    echo "Configuring Onyx Panel 1.9.16..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -492,7 +492,7 @@ fi
 
 echo "[1/6] Writing manager..."
 
-for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_warp.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
+for module in onyx_subscriptions.py onyx_panel_extras.py onyx_ui.py onyx_metrics.py onyx_update.py onyx_nodes.py onyx_openflux.py onyx_awg.py onyx_firewall.py onyx_components.py onyx_cascade.py onyx_routing.py onyx_warp.py onyx_reality.py onyx_telegram.py onyx_totp.py onyx_access.py onyx_webapi.py onyx_failover.py; do
     [[ -s "$BASE/$module" ]] || die "Package is incomplete: $module is missing."
     install -o root -g root -m 0644 "$BASE/$module" "$APP_DIR/$module"
 done
@@ -548,6 +548,7 @@ import onyx_firewall
 import onyx_cascade
 import onyx_routing
 import onyx_warp
+import onyx_reality
 
 USERS="/etc/onyx-panel/users.json"
 PROFILES="/etc/tproxy-server/profiles.json"
@@ -574,6 +575,7 @@ TRAFFIC_LOCK="/var/lib/onyx-panel/traffic.lock"
 CASCADES_FILE="/var/lib/onyx-panel/cascades.json"
 ROUTING_FILE="/var/lib/onyx-panel/routing.json"
 WARP_FILE="/var/lib/onyx-panel/warp.json"
+REALITY_FILE="/var/lib/onyx-panel/reality.json"
 UFW_HYSTERIA_MARKER="/etc/onyx-panel/hysteria-ufw-owned"
 UFW_MTPROTO_MARKER="/etc/onyx-panel/mtproto-ufw-owned"
 UFW_AWG_MARKER="/etc/onyx-panel/awg-ufw-owned"
@@ -775,8 +777,9 @@ def sync_firewall(d):
     route=run("ip","-4","route","show","default").stdout or ""
     match=re.search(r"\bdev\s+([A-Za-z0-9_.:-]+)",route)
     external_if=match.group(1) if match else ""
+    reality_tcp={int(reality_state["port"])} if reality_state.get("enabled") else set()
     onyx_firewall.reconcile(
-        tcp={80,443,*mtproto_ports},
+        tcp={80,443,*mtproto_ports,*reality_tcp},
         udp=({HYSTERIA_PORT} if hysteria_enabled else set()) | {int(u["backend_port"]) for u in awg_users},
         routes={(u["awg_interface"],external_if) for u in awg_users if external_if},
     )
@@ -820,6 +823,11 @@ def sync_xray(d):
         elif protocol=="hysteria":
             hysteria.append({"auth":u["secret"],"email":"panel:"+u["id"],"level":0})
     inbounds=[]
+    # Reality-вход: тот же набор vless-пользователей с flow vision; пока выключен
+    # или клиентов нет — конфиг не меняется.
+    reality_state=onyx_reality.load(REALITY_FILE)
+    reality_inbound=onyx_reality.inbound(reality_state,d.get("users",[]))
+    if reality_inbound: inbounds.append(reality_inbound)
     if vless:
         inbounds.append({
             "tag":"vless-xhttp",
@@ -1749,6 +1757,7 @@ import onyx_awg as awg
 import onyx_cascade as cascade_api
 import onyx_routing as routing_api
 import onyx_warp as warp_api
+import onyx_reality as reality_api
 import onyx_telegram as telegram_api
 import onyx_totp
 import onyx_access
@@ -1791,6 +1800,7 @@ LOCATION_FILE="/var/lib/onyx-panel/location.json"
 CASCADES_FILE="/var/lib/onyx-panel/cascades.json"
 ROUTING_FILE="/var/lib/onyx-panel/routing.json"
 WARP_FILE="/var/lib/onyx-panel/warp.json"
+REALITY_FILE="/var/lib/onyx-panel/reality.json"
 RESTART_STATUS="/var/lib/onyx-panel/restart-status.json"
 API_KEY=node_api.ensure_api_key(API_KEY_FILE)
 # Live node snapshot for the dashboard: fetched in the background so a slow or
@@ -2292,7 +2302,7 @@ def sync_routing_to_nodes():
     terminates on a node must follow the same direct and block rules as the
     panel itself. Runs in a background thread — a node applies its Xray
     synchronously, which can take tens of seconds. Nodes without the endpoint
-    (panel older than 1.9.15) are skipped with a log line."""
+    (panel older than 1.9.16) are skipped with a log line."""
     data=routing_api.load(ROUTING_FILE)
     payload={"direct_ips":data.get("direct_ips",[]),"direct_domains":data.get("direct_domains",[]),
              "ipv4_domains":data.get("ipv4_domains",[]),"block_torrents":bool(data.get("block_torrents"))}
@@ -2518,6 +2528,12 @@ def proxy_link(protocol,secret,port=443,name="Proxy",username=""):
         if user is None: raise RuntimeError("Профиль AWG не найден")
         return awg.client_config(user,DOMAIN,name)
     raise RuntimeError("Неизвестный протокол")
+def reality_link(secret,name="Proxy"):
+    """vless:// Reality-ссылка; пустая строка, пока Reality выключен."""
+    r=reality_api.load(REALITY_FILE)
+    if not r.get("enabled"): return ""
+    return reality_api.link(r,secret,name,host=DOMAIN)
+
 def qr_png_bytes(link):
     return subprocess.run([QR,"-o","-","-t","PNG","-s","6","-m","2",link],
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=10).stdout
@@ -2684,7 +2700,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.9.15","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.16","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2853,7 +2869,7 @@ class Handler(BaseHTTPRequestHandler):
             profiles=[{"id":"primary","name":"Основной WEB Proxy","secret":primary(),"protocol":"web","enabled":True,"backend_port":443}]+users()
             nodes_live()
             warp_state=warp_api.load(WARP_FILE)
-            body=users_ui(subscription_registry(),profiles,traffic(),PANEL_PATH,DOMAIN,self.csrf(),proxy_link,openflux.profile_states(),load().get("expires",{}),node_summary=nodes_client_summary(),warp_ready=warp_api.configured(warp_state),warp_ids=set(warp_state.get("users",[])))
+            body=users_ui(subscription_registry(),profiles,traffic(),PANEL_PATH,DOMAIN,self.csrf(),proxy_link,openflux.profile_states(),load().get("expires",{}),node_summary=nodes_client_summary(),warp_ready=warp_api.configured(warp_state),warp_ids=set(warp_state.get("users",[])),reality_link=reality_link)
             self.send_html(layout("Клиенты",body,"users",self.csrf())); return
         if path==PANEL_PATH+"/nodes":
             body=nodes_ui([node_api.public_node(n) for n in node_api.load_nodes(NODES_FILE)],
@@ -2873,7 +2889,7 @@ class Handler(BaseHTTPRequestHandler):
             _,_,cascade_carriers=cascade_api.route_assignment(cascade_records,users())
             self.send_json({"ok":True,"cascades":[cascade_state_view(c,cascade_carriers) for c in cascade_records]}); return
         if path==PANEL_PATH+"/routing":
-            body=routing_ui(routing_api.load(ROUTING_FILE),PANEL_PATH,self.csrf(),DOMAIN,warp=warp_api.load(WARP_FILE))
+            body=routing_ui(routing_api.load(ROUTING_FILE),PANEL_PATH,self.csrf(),DOMAIN,warp=warp_api.load(WARP_FILE),reality=reality_api.load(REALITY_FILE))
             self.send_html(layout("Маршрутизация",body,"routing",self.csrf())); return
         if path==PANEL_PATH+"/restart-status":
             try:
@@ -3725,6 +3741,47 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
             except (OSError,subprocess.TimeoutExpired) as exc:
                 print("routing torrent failed:",type(exc).__name__,file=sys.stderr,flush=True)
                 self.send_json({"ok":False,"message":"Операция не выполнена. Проверьте службы панели."},503); return
+        if path==PANEL_PATH+"/reality-setup":
+            operation=form.get("operation","")
+            try:
+                if operation=="enable":
+                    port=int(form.get("port","2053") or 2053)
+                    dest=str(form.get("dest","") or "").strip()
+                    busy={80,443,8443}
+                    for u in users():
+                        try: busy.add(int(u.get("backend_port",0) or 0))
+                        except (TypeError,ValueError): pass
+                    if port in busy:
+                        raise reality_api.RealityError("Порт %d уже занят панелью или её службами — выберите другой."%port)
+                    reality_api.setup(REALITY_FILE,port=port,dest=dest)
+                    ctl("cascade-apply"); ctl("firewall")
+                    self.send_json({"ok":True,"message":"Reality включён — ссылки появятся в подписках и профилях vless-клиентов."}); return
+                if operation=="test-mask":
+                    result=reality_api.check_dest(str(form.get("dest","") or "").strip())
+                    if not result.get("ok"):
+                        self.send_json({"ok":False,"message":result.get("message","Маска не проверена.")},502); return
+                    self.send_json({"ok":True,"message":result.get("message","")}); return
+                if operation=="selftest":
+                    r=reality_api.load(REALITY_FILE)
+                    user=next((u for u in users() if u.get("enabled",True) and u.get("protocol")=="vless" and u.get("secret")),None)
+                    if user is None:
+                        self.send_json({"ok":False,"message":"Нет включённых vless-клиентов для проверки."},400); return
+                    result=reality_api.selftest(r,user["secret"])
+                    if not result.get("ok"):
+                        self.send_json({"ok":False,"message":result.get("message","Проверка не удалась.")},502); return
+                    self.send_json({"ok":True,"message":"Подключение через Reality работает: IP "+result.get("exit_ip","?")}); return
+                if operation=="disable":
+                    reality_api.reset(REALITY_FILE)
+                    ctl("cascade-apply"); ctl("firewall")
+                    self.send_json({"ok":True,"message":"Reality отключён — Reality-ссылки убраны из подписок."}); return
+                self.send_json({"ok":False,"message":"Неизвестная операция."},400); return
+            except reality_api.RealityError as exc:
+                self.send_json({"ok":False,"message":str(exc)},400); return
+            except RuntimeError as exc:
+                self.send_json({"ok":False,"message":"Не удалось применить конфигурацию: "+str(exc)[-160:]},503); return
+            except (OSError,subprocess.TimeoutExpired) as exc:
+                print("reality setup failed:",type(exc).__name__,file=sys.stderr,flush=True)
+                self.send_json({"ok":False,"message":"Операция не выполнена. Проверьте службы панели."},503); return
         if path==PANEL_PATH+"/routing-warp":
             operation=form.get("operation","")
             try:
@@ -4238,6 +4295,7 @@ if(copyBtn)copyBtn.addEventListener("click",()=>{const t=document.getElementById
             labels={"vless":"VLESS","hysteria":"Hysteria2"}
             local_name=node_api.location_prefix(node_api.load_location(LOCATION_FILE))
             lines=[proxy_link(u["protocol"],u["secret"],u["backend_port"],local_name+" · "+labels[u["protocol"]],u.get("username","")) for u in result["users"]]
+            lines+=[link for link in (reality_link(u["secret"],local_name+" · Reality") for u in result["users"] if u["protocol"]=="vless") if link]
             if result["users"]:
                 first=result["users"][0]
                 remote_id=federation_id(first.get("subscription_id",""),first.get("device_id",""))
@@ -4273,6 +4331,7 @@ BACKUP_FILES=(
     ("panel/cascades.json","/var/lib/onyx-panel/cascades.json",False),
     ("panel/routing.json","/var/lib/onyx-panel/routing.json",False),
     ("panel/warp.json","/var/lib/onyx-panel/warp.json",False),
+    ("panel/reality.json","/var/lib/onyx-panel/reality.json",False),
     ("panel/location.json","/var/lib/onyx-panel/location.json",False),
     ("panel/api.key","/var/lib/onyx-panel/api.key",False),
     ("onyx-panel/users.json","/etc/onyx-panel/users.json",True),
@@ -4539,7 +4598,7 @@ PY
 fi
 
 python3 -m py_compile "$APP_FILE"
-python3 -m py_compile "$APP_DIR/onyx_subscriptions.py" "$APP_DIR/onyx_panel_extras.py" "$APP_DIR/onyx_ui.py" "$APP_DIR/onyx_metrics.py" "$APP_DIR/onyx_update.py" "$APP_DIR/onyx_nodes.py" "$APP_DIR/onyx_openflux.py" "$APP_DIR/onyx_awg.py" "$APP_DIR/onyx_firewall.py" "$APP_DIR/onyx_components.py" "$APP_DIR/onyx_cascade.py" "$APP_DIR/onyx_routing.py" "$APP_DIR/onyx_warp.py" "$APP_DIR/onyx_telegram.py" "$APP_DIR/onyx_totp.py" "$APP_DIR/onyx_access.py" "$APP_DIR/onyx_webapi.py" "$APP_DIR/onyx_failover.py"
+python3 -m py_compile "$APP_DIR/onyx_subscriptions.py" "$APP_DIR/onyx_panel_extras.py" "$APP_DIR/onyx_ui.py" "$APP_DIR/onyx_metrics.py" "$APP_DIR/onyx_update.py" "$APP_DIR/onyx_nodes.py" "$APP_DIR/onyx_openflux.py" "$APP_DIR/onyx_awg.py" "$APP_DIR/onyx_firewall.py" "$APP_DIR/onyx_components.py" "$APP_DIR/onyx_cascade.py" "$APP_DIR/onyx_routing.py" "$APP_DIR/onyx_warp.py" "$APP_DIR/onyx_reality.py" "$APP_DIR/onyx_telegram.py" "$APP_DIR/onyx_totp.py" "$APP_DIR/onyx_access.py" "$APP_DIR/onyx_webapi.py" "$APP_DIR/onyx_failover.py"
 
 
 # ---- Finish installation: service, Caddy route, permissions, start ----
@@ -4579,7 +4638,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.9.15
+Description=Onyx Panel 1.9.16
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -5135,9 +5194,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.9.15 UPDATED"
+echo "          Onyx Panel 1.9.16 UPDATED"
 else
-echo "         Onyx Panel 1.9.15 IS READY"
+echo "         Onyx Panel 1.9.16 IS READY"
 fi
 echo "============================================================"
 echo
