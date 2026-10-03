@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.9.2..."
+    echo "Updating Onyx Panel 1.9.3..."
 else
-    echo "Configuring Onyx Panel 1.9.2..."
+    echo "Configuring Onyx Panel 1.9.3..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -1775,6 +1775,8 @@ SITE_DRAFT="/var/lib/onyx-panel/site-draft.html"
 CUSTOM_PRESETS_FILE="/var/lib/onyx-panel/custom-presets.json"
 API_KEY_FILE="/var/lib/onyx-panel/api.key"
 NODES_FILE="/var/lib/onyx-panel/nodes.json"
+NODES_TRAFFIC_FILE="/var/lib/onyx-panel/nodes-traffic.json"
+NODES_TRAFFIC={"loaded":False,"points":[]}
 LOCATION_FILE="/var/lib/onyx-panel/location.json"
 CASCADES_FILE="/var/lib/onyx-panel/cascades.json"
 ROUTING_FILE="/var/lib/onyx-panel/routing.json"
@@ -2263,12 +2265,14 @@ def purge_remote_profiles_async(subscription,device_id=None):
                      name="onyx-node-cleanup",daemon=True).start()
 
 def federation_names():
-    """federation_id -> (subscription, device) labels, rebuilt from the registry."""
+    """federation_id -> subscription/device labels with the owning client id."""
     mapping={}
     for sub in subscription_registry():
         for device in sub.get("devices",[]) or []:
             if device.get("revoked"): continue
-            mapping[federation_id(sub.get("id",""),device.get("id",""))]=(sub.get("name","Подписка"),device.get("name","Устройство"))
+            mapping[federation_id(sub.get("id",""),device.get("id",""))]={
+                "sub":sub.get("name","Подписка"),"device":device.get("name","Устройство"),
+                "sub_id":sub.get("id","")}
     return mapping
 
 def fetch_node_live(node,names,current=""):
@@ -2313,7 +2317,7 @@ def fetch_node_live(node,names,current=""):
         if not isinstance(profile,dict): continue
         label=names.get(str(profile.get("federation_id","")))
         if label is None: continue
-        snapshot["users"].append({"name":label[0],"device":label[1],
+        snapshot["users"].append({"name":label["sub"],"device":label["device"],"sub_id":label["sub_id"],
             "protocol":str(profile.get("protocol","")),"active":bool(profile.get("active")),
             "up":max(0,int(profile.get("up",0) or 0)),"down":max(0,int(profile.get("down",0) or 0))})
     snapshot["users"].sort(key=lambda u:(not u["active"],-(u["up"]+u["down"])))
@@ -2332,6 +2336,7 @@ def refresh_nodes_live():
                 data=list(pool.map(worker,nodes))
         else:
             data=[]
+        record_nodes_history(data)
         with NODES_LIVE_LOCK:
             NODES_LIVE["stamp"]=time.time()
             NODES_LIVE["data"]=data
@@ -2356,6 +2361,68 @@ def nodes_live(max_age=15):
         data=NODES_LIVE.get("data",[])
         age=int(time.time()-stamp) if stamp else None
     return {"nodes":data,"age":age}
+
+def nodes_client_summary():
+    """client id -> node traffic and activity, from the cached node snapshots."""
+    with NODES_LIVE_LOCK:
+        nodes=list(NODES_LIVE.get("data",[]))
+    out={}
+    for s in nodes:
+        if not s.get("online"): continue
+        where=s.get("location") or s.get("country_name") or s.get("url","")
+        for u in s.get("users",[]):
+            cid=u.get("sub_id")
+            if not cid: continue
+            rec=out.setdefault(cid,{"active":False,"up":0,"down":0,"nodes":[]})
+            rec["up"]+=u.get("up",0); rec["down"]+=u.get("down",0)
+            if where not in rec["nodes"]: rec["nodes"].append(where)
+            if u.get("active"): rec["active"]=True
+    return out
+
+def _load_nodes_traffic(now):
+    """Lazily read the persisted node rate history once per panel run."""
+    if NODES_TRAFFIC["loaded"]: return
+    try:
+        with open(NODES_TRAFFIC_FILE,encoding="utf-8") as f: value=json.load(f)
+        NODES_TRAFFIC["points"]=[p for p in value.get("points",[]) if isinstance(p,dict) and now-p.get("time",0)<86400] if isinstance(value,dict) else []
+    except (OSError,ValueError): pass
+    NODES_TRAFFIC["loaded"]=True
+
+def record_nodes_history(data):
+    """Persist node rate samples for the dashboard chart (24 h window)."""
+    try:
+        now=int(time.time())
+        _load_nodes_traffic(now)
+        points=NODES_TRAFFIC["points"]
+        if points and now-points[-1]["time"]<10: return
+        points.append({"time":now,"nodes":[{"id":s.get("id",""),
+            "up":(s.get("rates") or {}).get("up"),"down":(s.get("rates") or {}).get("down")}
+            for s in data if s.get("online")]})
+        NODES_TRAFFIC["points"]=[p for p in points if now-p["time"]<86400][-2880:]
+        server_metrics.atomic_json(NODES_TRAFFIC_FILE,{"points":NODES_TRAFFIC["points"]})
+    except Exception as exc:
+        print("nodes history write failed:",type(exc).__name__,file=sys.stderr,flush=True)
+
+NODE_COLORS=("#41c78d","#f06f75","#a78bfa","#22d3ee","#f472b6","#fb923c","#34d399","#60a5fa","#e879f9","#fbbf24")
+def nodes_chart_series(hours):
+    """Per-node rate series for the dashboard chart, colored by registry order."""
+    try: registry=node_api.load_nodes(NODES_FILE)
+    except Exception: registry=[]
+    cutoff=int(time.time())-hours*3600
+    _load_nodes_traffic(cutoff)
+    by_id={}
+    for p in NODES_TRAFFIC.get("points",[]):
+        if p.get("time",0)<cutoff: continue
+        for item in p.get("nodes",[]):
+            by_id.setdefault(item.get("id",""),[]).append({"time":p["time"],"up":item.get("up"),"down":item.get("down")})
+    series=[]
+    for i,node in enumerate(registry):
+        pts=by_id.pop(node.get("id",""),None)
+        if not pts: continue
+        series.append({"id":node.get("id",""),
+            "name":node.get("name") or node.get("country_name") or node.get("url",""),
+            "color":NODE_COLORS[i%len(NODE_COLORS)],"points":pts})
+    return series
 def allow_subscription_request(client):
     now=time.monotonic()
     with SUB_RATE_LOCK:
@@ -2566,7 +2633,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.9.2","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.3","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2705,7 +2772,8 @@ class Handler(BaseHTTPRequestHandler):
             if hours not in (1,6,24): hours=1
             profiles=[{"id":"primary","name":"Основной WEB Proxy","secret":primary(),"protocol":"web","enabled":True,"backend_port":443}]+users()
             body=dashboard_body(server_metrics.dashboard_data(hours),subscription_registry(),profiles,traffic(),
-                                PANEL_PATH,DOMAIN,self.csrf(),proxy_link,web_updates.current_version(),hours,nodes=nodes_live())
+                                PANEL_PATH,DOMAIN,self.csrf(),proxy_link,web_updates.current_version(),hours,nodes=nodes_live(),
+                                node_series=nodes_chart_series(hours),node_summary=nodes_client_summary())
             if path.endswith("/dashboard-data"):
                 self.send_json({"html":body,"update":web_updates.get_status()})
             else:
@@ -2714,7 +2782,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path==PANEL_PATH+'/clients-state':
             profiles=[{'id':'primary','name':'Основной WEB Proxy','secret':primary(),'protocol':'web','enabled':True,'backend_port':443}]+users()
-            records=client_records(subscription_registry(),profiles,traffic(),DOMAIN,proxy_link)
+            nodes_live()
+            records=client_records(subscription_registry(),profiles,traffic(),DOMAIN,proxy_link,node_summary=nodes_client_summary())
             records=[r for r in records if r['id']!='primary']
             clients=[{'id':r['id'],'name':r['name'],'kind':r['kind'],'enabled':r['enabled'],
                 'protocols':r['protocols'],'devices':r['devices'],'limit':r['limit'],**r['totals']} for r in records]
@@ -2726,7 +2795,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path==PANEL_PATH+"/users":
             profiles=[{"id":"primary","name":"Основной WEB Proxy","secret":primary(),"protocol":"web","enabled":True,"backend_port":443}]+users()
-            body=users_ui(subscription_registry(),profiles,traffic(),PANEL_PATH,DOMAIN,self.csrf(),proxy_link,openflux.profile_states(),load().get("expires",{}))
+            nodes_live()
+            body=users_ui(subscription_registry(),profiles,traffic(),PANEL_PATH,DOMAIN,self.csrf(),proxy_link,openflux.profile_states(),load().get("expires",{}),node_summary=nodes_client_summary())
             self.send_html(layout("Клиенты",body,"users",self.csrf())); return
         if path==PANEL_PATH+"/nodes":
             body=nodes_ui([node_api.public_node(n) for n in node_api.load_nodes(NODES_FILE)],
@@ -4378,7 +4448,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.9.2
+Description=Onyx Panel 1.9.3
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4934,9 +5004,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.9.2 UPDATED"
+echo "          Onyx Panel 1.9.3 UPDATED"
 else
-echo "         Onyx Panel 1.9.2 IS READY"
+echo "         Onyx Panel 1.9.3 IS READY"
 fi
 echo "============================================================"
 echo
