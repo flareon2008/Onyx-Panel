@@ -304,6 +304,72 @@ onyx_reality.reset(r_tmp)
 assert not onyx_reality.enabled(onyx_reality.load(r_tmp))
 print('REALITY OK')
 
+# ---- embedded code: sync_xray/sync_firewall исполняются со стабами (ловля NameError)
+import ast as _ast, types as _types
+import json as json, re as re, time as time
+_lines = open(os.path.join(ROOT, "install-panel.sh"), encoding="utf-8").read().split("\n")
+_man = _lines.index('cat > "$MANAGER" <<\'PY\'')
+_man_end = _lines.index("PY", _man + 1)
+_man_code = "\n".join(_lines[_man + 1:_man_end])
+_tree = _ast.parse(_man_code, feature_version=(3, 10))
+
+class _OsShim:
+    def __getattr__(self, name): return getattr(os, name)
+    def chown(self, *a, **k): pass
+
+_ns = {'onyx_routing': _types.SimpleNamespace(load=lambda p: {}, xray_additions=lambda d: ([], [])),
+       'onyx_warp': _types.SimpleNamespace(load=lambda p: {'users': []}, EMAIL_PREFIX='panel:', xray_additions=lambda s, u: ([], [])),
+       'onyx_reality': _types.SimpleNamespace(load=lambda p: {'enabled': True, 'port': 2053, 'dest': 'www.wildberries.ru:443',
+                                                              'server_names': ['www.wildberries.ru'],
+                                                              'private_key': 'P' * 42 + 'A=', 'public_key': 'Q' * 42 + 'A=',
+                                                              'short_ids': ['abcd1234']},
+                                              inbound=lambda s, u: onyx_reality.inbound(s, u)),
+       'onyx_cascade': _types.SimpleNamespace(load_cascades=lambda p: [], xray_additions=lambda c, u: ([], [])),
+       'onyx_awg': _types.SimpleNamespace(PROTOCOLS=('awg20', 'awg31')),
+       'XRAY_PATH_FILE': os.path.join(ROOT, 'tests', 'xray-path-stub'), 'XRAY_VLESS_PORT': 10000,
+       'HYSTERIA_PORT': 8443, 'XRAY_CERT': os.path.join(ROOT, 'tests', 'cert-stub'),
+       'XRAY_KEY': os.path.join(ROOT, 'tests', 'key-stub'),
+       'XRAY_CONFIG': os.path.join(tempfile.mkdtemp(), 'config.json'),
+       'XRAY_API': '127.0.0.1:10085', 'XRAY_BIN': '/bin/true', 'XRAY_SERVICE': 'onyx-panel-xray',
+       'ROUTING_FILE': '/tmp/none1', 'WARP_FILE': '/tmp/none2', 'REALITY_FILE': '/tmp/none3',
+       'CASCADES_FILE': '/tmp/none4', 'FIREWALL_SCRIPT': '/tmp/fw-stub.sh',
+       'run': lambda *a, **k: _types.SimpleNamespace(returncode=0, stdout='OK', stderr=''),
+       'os': _OsShim(), 're': re, 'json': json, 'time': time, 'sys': sys,
+       'grp': _types.SimpleNamespace(getgrnam=lambda name: _types.SimpleNamespace(gr_gid=0))}
+
+def _extract_fn(name):
+    fn = next(n for n in _tree.body if isinstance(n, _ast.FunctionDef) and n.name == name)
+    return _ast.Module(body=[fn], type_ignores=[])
+
+# sync_xray: включённый Reality даёт инбаунд перед xhttp, выключенный — ничего
+_path_dir = os.path.dirname(_ns['XRAY_PATH_FILE'])
+os.makedirs(_path_dir, exist_ok=True)
+open(_ns['XRAY_PATH_FILE'], 'w').write('/vless-' + 'a' * 24)
+open(_ns['XRAY_CERT'], 'w').write('x'); open(_ns['XRAY_KEY'], 'w').write('x')
+exec(compile(_extract_fn('sync_xray'), 'sync_xray', 'exec'), _ns)
+_d = {'users': [{'id': 'aabbccddeeff0011', 'secret': 'S1' * 8, 'protocol': 'vless', 'enabled': True}]}
+_ns['sync_xray'](_d)
+_cfg = json.load(open(_ns['XRAY_CONFIG']))
+_tags = [i['tag'] for i in _cfg['inbounds']]
+assert _tags[0] == 'vless-reality' and 'vless-xhttp' in _tags, _tags
+_ns['onyx_reality'].load = lambda p: {'enabled': False}
+_ns['sync_xray'](_d)
+assert 'vless-reality' not in [i['tag'] for i in json.load(open(_ns['XRAY_CONFIG']))['inbounds']]
+
+# sync_firewall: порт Reality попадает в UFW tcp-набор только при включённом
+_recon = {}
+_ns['onyx_firewall'] = _types.SimpleNamespace(reconcile=lambda **kw: _recon.update(kw))
+_ns['onyx_reality'].load = lambda p: {'enabled': True, 'port': 2053}
+_ns['onyx_routing'].load = lambda p: {}
+exec(compile(_extract_fn('sync_firewall'), 'sync_firewall', 'exec'), _ns)
+_ns['collect_traffic'] = lambda d: None
+_ns['sync_firewall']({'users': [{'id': 'x', 'protocol': 'hysteria', 'enabled': True, 'backend_port': 8443}]})
+assert 2053 in _recon['tcp']
+_ns['onyx_reality'].load = lambda p: {'enabled': False}
+_ns['sync_firewall']({'users': [{'id': 'x', 'protocol': 'hysteria', 'enabled': True, 'backend_port': 8443}]})
+assert 2053 not in _recon['tcp']
+print('EMBEDDED SYNC OK')
+
 # ---- Python 3.10 grammar check (Ubuntu 22.04 target): no 3.12+ f-string syntax
 import ast
 import glob
