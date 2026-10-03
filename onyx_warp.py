@@ -172,14 +172,27 @@ def register(path):
     peer = peers[0] if peers and isinstance(peers[0], dict) else {}
     endpoints = peer.get('endpoint') if isinstance(peer.get('endpoint'), dict) else {}
     address = str((interface.get('addresses') or {}).get('v4', DEFAULT_ADDRESS)).split('/')[0] or DEFAULT_ADDRESS
+    # The API reports endpoint.host as host:port; the v4/v6 entries carry port 0
+    # and a separate ports list. Prefer host, then rebuild from v4 + ports.
+    endpoint = str(endpoints.get('host', '') or '')
+    if not endpoint:
+        v4 = str(endpoints.get('v4', '') or '')
+        host = v4.rsplit(':', 1)[0] if ':' in v4 else 'engage.cloudflareclient.com'
+        ports = endpoints.get('ports') or []
+        endpoint = host + ':' + str(ports[0] if ports else 2408)
     client_id = str(config.get('client_id', '') or '')
+    # client_id is base64 (3 bytes) in current API responses; older builds sent hex.
     reserved = []
-    if re.fullmatch(r'[0-9a-fA-F]{2,6}', client_id):
+    try:
+        reserved = list(base64.urlsafe_b64decode(client_id + '=' * (-len(client_id) % 4)))[:3]
+    except ValueError:
+        pass
+    if not reserved and re.fullmatch(r'[0-9a-fA-F]{2,6}', client_id):
         reserved = list(bytes.fromhex(client_id))[:3]
     state = _validate_keys({'private_key': private_key,
                             'peer_public_key': str(peer.get('public_key', '') or PEER_PUBLIC_KEY),
                             'address': address,
-                            'endpoint': str(endpoints.get('v4', '') or DEFAULT_ENDPOINT),
+                            'endpoint': endpoint,
                             'reserved': reserved, 'client_id': client_id,
                             'registered_at': int(time.time()), 'exit_ip': '', 'checked_at': 0})
     with _lock:
