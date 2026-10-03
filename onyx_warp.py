@@ -29,6 +29,7 @@ DEFAULT_ADDRESS = '172.16.0.2'
 MTU = 1280
 EMAIL_PREFIX = 'panel:'   # same scheme sync_xray uses for client emails
 IP_URL = 'https://api.ipify.org'
+XRAY_BIN = '/opt/onyx-panel/xray/xray'   # same location onyx_cascade probes with
 KEY_RE = re.compile(r'^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$')
 ENDPOINT_RE = re.compile(r'^[a-zA-Z0-9._\-]+:\d{1,5}$')
 
@@ -303,7 +304,7 @@ def _wait_port(port, process, timeout=12):
     return False
 
 
-def check(state, xray_bin='xray', curl_bin='curl'):
+def check(state, xray_bin=XRAY_BIN, curl_bin='curl'):
     """Throwaway socks probe through the WARP outbound; reports the exit IP."""
     result = {'ok': False, 'exit_ip': '', 'message': '', 'checked_at': int(time.time())}
     if not configured(state):

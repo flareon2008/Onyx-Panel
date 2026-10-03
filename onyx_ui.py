@@ -1098,7 +1098,7 @@ dialog{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 
 # Full mobile adaptation: dialogs must always scroll, inputs must not trigger
 # iOS focus zoom, and touch targets stay comfortable on every device.
-CSS += '''.warp-btn.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}.warp-btn.on .ico{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 45%,transparent))}
+CSS += '''.warp-btn.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}.warp-btn.on .ico{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 45%,transparent))}.warp-manual{margin-top:16px}.warp-manual summary{cursor:pointer;color:var(--accent);font-size:12px;width:max-content;padding:2px 0}.warp-manual textarea{margin:12px 0 10px;font:11px ui-monospace,Consolas,monospace}.warp-manual .actions{margin-top:0}
 '''
 
 CSS += '''
