@@ -44,6 +44,12 @@ def load(path):
         value = {}
     if not isinstance(value, dict):
         value = {}
+    # Xray 26+ принимает ключи Reality без base64-padding; файл мог быть записан
+    # старой версией панели — нормализуем при каждом чтении, чтобы sync_xray
+    # и обновления не падали на устаревшем состоянии.
+    for key in ('private_key', 'public_key'):
+        if isinstance(value.get(key), str):
+            value[key] = value[key].rstrip('=')
     return value
 
 
