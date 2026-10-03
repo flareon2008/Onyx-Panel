@@ -28,7 +28,7 @@ DEFAULT_PORT = 2053
 DEFAULT_DEST = 'www.wildberries.ru:443'
 DEST_RE = re.compile(r'^[a-zA-Z0-9._\-]+:\d{1,5}$')
 SHORT_ID_RE = re.compile(r'^[0-9a-f]{0,16}$')
-KEY_RE = onyx_warp.KEY_RE
+KEY_RE = re.compile(r'^[A-Za-z0-9+/]{43}=?$')
 _lock = onyx_warp._lock
 
 
@@ -78,9 +78,12 @@ def validate(state):
     if not isinstance(names, list) or not names or any(not re.match(r'^[a-zA-Z0-9._\-]+$', str(n)) for n in names):
         raise RealityError('SNI маски указан некорректно.')
     state['server_names'] = [str(n).lower() for n in names]
-    if not KEY_RE.match(str(state.get('private_key', ''))):
+    # Xray 26+ принимает X25519-ключи Reality только без base64-padding (43 символа).
+    state['private_key'] = str(state.get('private_key', '')).rstrip('=')
+    state['public_key'] = str(state.get('public_key', '')).rstrip('=')
+    if not KEY_RE.match(state['private_key']):
         raise RealityError('Приватный ключ Reality должен быть X25519-ключом в base64.')
-    if not KEY_RE.match(str(state.get('public_key', ''))):
+    if not KEY_RE.match(state['public_key']):
         raise RealityError('Публичный ключ Reality должен быть X25519-ключом в base64.')
     ids = state.get('short_ids')
     if not isinstance(ids, list) or not ids or any(not SHORT_ID_RE.match(str(i)) for i in ids):
@@ -150,25 +153,33 @@ def link(state, secret, name='Proxy', host=''):
             + '?' + query + '#' + label)
 
 
-def check_dest(dest, timeout=10):
-    """Verify the masquerade target supports TLS 1.3 + h2 + X25519."""
+def check_dest(dest, timeout=10, curl_bin='curl'):
+    """Verify the masquerade target supports TLS 1.3 + h2 + X25519.
+
+    HTTP/2 is probed with curl (site WAFs often withhold ALPN from a bare
+    openssl handshake), TLS 1.3 and the X25519 key exchange with openssl."""
     host = str(dest).rsplit(':', 1)[0]
     result = {'ok': False, 'message': '', 'checked_at': int(time.time())}
-    args = ['openssl', 's_client', '-connect', str(dest), '-servername', host,
-            '-tls1_3', '-alpn', 'h2', '-brief']
     try:
-        run = subprocess.run(args, input='', capture_output=True, text=True, timeout=timeout)
+        tls = subprocess.run(['openssl', 's_client', '-connect', str(dest), '-servername', host,
+                              '-tls1_3', '-brief'], input='', capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as exc:
         result['message'] = 'Не удалось запустить openssl: ' + str(exc)
         return result
-    output = (run.stdout or '') + (run.stderr or '')
-    tls13 = 'TLSv1.3' in output
-    h2 = 'h2' in output or 'ALPN protocol: h2' in output
-    x25519 = 'X25519' in output
-    if run.returncode and not output:
-        result['message'] = 'Цель маскировки не отвечает: ' + dest
+    output = (tls.stdout or '') + (tls.stderr or '')
+    if 'TLSv1.3' not in output:
+        result['message'] = 'Сайт ' + host + ' не поддерживает TLS 1.3 — маска Reality не подойдёт.'
         return result
-    missing = [name for name, ok in (('TLS 1.3', tls13), ('HTTP/2', h2), ('X25519', x25519)) if not ok]
+    x25519 = 'X25519' in output
+    try:
+        http = subprocess.run([curl_bin, '-sI', '--http2', '-o', os.devnull,
+                               '-w', '%{http_version}', '--max-time', str(timeout), 'https://' + host],
+                              capture_output=True, text=True, timeout=timeout + 2)
+    except (OSError, subprocess.SubprocessError) as exc:
+        result['message'] = 'Не удалось запустить curl: ' + str(exc)
+        return result
+    h2 = (http.stdout or '').strip().startswith('2')
+    missing = [name for name, ok in (('HTTP/2', h2), ('X25519', x25519)) if not ok]
     if missing:
         result['message'] = ('Сайт ' + host + ' не подходит для маски Reality: нет ' +
                              ', '.join(missing) + '.')

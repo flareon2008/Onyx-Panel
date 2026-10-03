@@ -274,7 +274,8 @@ r_tmp = str(Path(tempfile.mkdtemp()) / 'reality.json')
 state = onyx_reality.setup(r_tmp, port=2053, dest='www.wildberries.ru:443')
 assert state['enabled'] is True and state['port'] == 2053
 assert all(onyx_reality.SHORT_ID_RE.match(i) for i in state['short_ids']) and len(state['short_ids']) == 4
-assert state['private_key'] != priv_r                     # каждый setup — новые ключи
+assert state['private_key'] != priv_r.rstrip('=')         # каждый setup — новые ключи
+assert not state['private_key'].endswith('=')             # Xray 26+ требует ключ без padding
 for bad in ({'port': 80, 'dest': 'a.com:443'}, {'port': 2053, 'dest': 'no port'},
             {'port': 2053, 'dest': 'a.com:443', 'private_key': 'short', 'public_key': pub_r}):
     try:
