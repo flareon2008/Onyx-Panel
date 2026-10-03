@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.9.13..."
+    echo "Updating Onyx Panel 1.9.14..."
 else
-    echo "Configuring Onyx Panel 1.9.13..."
+    echo "Configuring Onyx Panel 1.9.14..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2292,7 +2292,7 @@ def sync_routing_to_nodes():
     terminates on a node must follow the same direct and block rules as the
     panel itself. Runs in a background thread — a node applies its Xray
     synchronously, which can take tens of seconds. Nodes without the endpoint
-    (panel older than 1.9.13) are skipped with a log line."""
+    (panel older than 1.9.14) are skipped with a log line."""
     data=routing_api.load(ROUTING_FILE)
     payload={"direct_ips":data.get("direct_ips",[]),"direct_domains":data.get("direct_domains",[]),
              "ipv4_domains":data.get("ipv4_domains",[]),"block_torrents":bool(data.get("block_torrents"))}
@@ -2684,7 +2684,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.9.13","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.14","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -4579,7 +4579,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.9.13
+Description=Onyx Panel 1.9.14
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -5135,9 +5135,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.9.13 UPDATED"
+echo "          Onyx Panel 1.9.14 UPDATED"
 else
-echo "         Onyx Panel 1.9.13 IS READY"
+echo "         Onyx Panel 1.9.14 IS READY"
 fi
 echo "============================================================"
 echo
