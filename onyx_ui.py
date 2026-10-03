@@ -434,6 +434,87 @@ CSS += '''
 '''
 
 
+PANEL_MODAL_JS = '''<script>
+(()=>{const PATH=@@PATH@@,CSRF=@@CSRF@@;
+const overlay=document.createElement('div');overlay.className='move-overlay';overlay.hidden=true;
+overlay.innerHTML='<div class="move-card" id="onyxPanelCard"><div class="move-ring" id="onyxPanelRing"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="move-ring-bg" cx="50" cy="50" r="44"/><circle class="move-ring-fg" cx="50" cy="50" r="44"/></svg><b id="onyxPanelRingText">↑</b></div><h3 id="onyxPanelTitle">Обновление панели</h3><p id="onyxPanelText"></p><div class="actions upd-actions" id="onyxPanelActions" hidden><button type="button" id="onyxPanelCancel">Отмена</button><button type="button" class="primary" id="onyxPanelGo">Обновить</button></div><div class="actions upd-actions"><button type="button" id="onyxPanelClose" hidden>Закрыть</button></div></div>';
+document.body.append(overlay);
+const card=overlay.querySelector('#onyxPanelCard'),ringText=overlay.querySelector('#onyxPanelRingText'),title=overlay.querySelector('#onyxPanelTitle'),text=overlay.querySelector('#onyxPanelText'),actions=overlay.querySelector('#onyxPanelActions'),goBtn=overlay.querySelector('#onyxPanelGo'),cancelBtn=overlay.querySelector('#onyxPanelCancel'),closeBtn=overlay.querySelector('#onyxPanelClose');
+let target='',goResolve=null,watchRun=0;
+function hide(){overlay.classList.remove('show');setTimeout(()=>{overlay.hidden=true},260);goResolve=null}
+function confirmState(value){
+ card.classList.remove('spin','time','upd-done','upd-err');actions.hidden=false;closeBtn.hidden=true;ringText.textContent='↑';
+ title.textContent='Обновить панель?';
+ text.textContent='Версия '+String(value).replace(/^v/,'')+' установится поверх текущей. Резервная копия создаётся автоматически, панель и подключения кратко прервутся.';
+ overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'));
+}
+function runningState(message){
+ card.classList.remove('upd-done','upd-err');card.classList.add('spin','time');actions.hidden=true;closeBtn.hidden=true;
+ title.textContent='Обновляем панель';text.textContent=message||'Устанавливаем обновление…';
+ overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('show'));
+}
+function fail(message){
+ card.classList.remove('spin','time');card.classList.add('upd-err');ringText.textContent='!';
+ title.textContent='Обновление не удалось';text.textContent=message||'Проверьте журнал через Onyx или SSH и попробуйте ещё раз.';
+ closeBtn.hidden=false;
+}
+function watchLoop(){
+ const started=Date.now(),my=++watchRun;
+ const clock=setInterval(()=>{if(my!==watchRun)return;const s=Math.floor((Date.now()-started)/1000);ringText.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')},500);
+ (async()=>{
+  let down=false;
+  while(Date.now()-started<15*60*1000){
+   if(my!==watchRun){clearInterval(clock);return}
+   await new Promise(res=>setTimeout(res,2000));
+   let d=null;
+   try{const r=await fetch(PATH+'/update-status',{cache:'no-store',signal:window.AbortSignal?AbortSignal.timeout(10000):undefined});if(r.ok&&!r.redirected)d=await r.json()}catch(e){}
+   if(my!==watchRun){clearInterval(clock);return}
+   if(!d){if(!down){down=true;text.textContent='Панель перезапускается — ждём возвращения…'}continue}
+   if(down&&['queued','running'].includes(d.phase))down=false;
+   if(['queued','running'].includes(d.phase)){text.textContent=d.message||'Устанавливаем обновление…';continue}
+   clearInterval(clock);
+   if(d.phase==='done'){
+    card.classList.remove('spin','time');card.classList.add('upd-done');ringText.textContent='✓';
+    title.textContent='Панель обновлена';text.textContent='Обновляем страницу…';
+    let left=5;ringText.textContent=left;
+    const cd=setInterval(()=>{if(my!==watchRun){clearInterval(cd);return}left-=1;if(left>0)ringText.textContent=left;else{clearInterval(cd);location.reload()}},1000);
+   }else fail(d.message||'Обновление завершилось ошибкой.');
+   return;
+  }
+  clearInterval(clock);
+  if(my===watchRun)fail('Обновление слишком долго не отвечает. Проверьте статус на странице «Обновления».');
+ })();
+}
+async function start(){
+ runningState('Создаём резервную копию и устанавливаем обновление…');
+ try{
+  const r=await fetch(PATH+'/update-start',{method:'POST',body:new URLSearchParams({csrf:CSRF,target}),
+      signal:window.AbortSignal?AbortSignal.timeout(30000):undefined});
+  if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');
+  let d;try{d=await r.json()}catch(e){throw new Error('Панель не отвечает')}
+  if(!r.ok)throw new Error(d.message||'Не удалось запустить обновление.');
+ }catch(e){fail(e.message||'Не удалось запустить обновление.');return}
+ watchLoop();
+}
+goBtn.addEventListener('click',()=>{const r=goResolve;goResolve=null;if(r)r(true)});
+cancelBtn.addEventListener('click',()=>{const r=goResolve;goResolve=null;hide();if(r)r(false)});
+closeBtn.addEventListener('click',hide);
+window.ONYXPanelModal={confirmAndStart(value){target=value;confirmState(value);goResolve=go=>{if(go)start()}}};
+// Если обновление уже идёт (запущено с другой страницы) — показать модалку.
+// На странице «Обновлений» у модалки своя реализация, там не дублируем.
+(async()=>{
+ if(document.getElementById('updOverlay'))return;
+ try{
+  const r=await fetch(PATH+'/update-status',{cache:'no-store',signal:window.AbortSignal?AbortSignal.timeout(10000):undefined});
+  if(!r.ok||r.redirected)return;
+  const d=await r.json();
+  if(['queued','running'].includes(d.phase)){runningState(d.message||'Обновление уже выполняется…');watchLoop()}
+ }catch(e){}
+})();
+})();
+</script>'''
+
+
 FAVICON_MARK = 'data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20128%20128%22%3E%3Cg%20transform=%22translate(14%2014)%22%3E%3Cpath%20fill=%22%23FF792D%22%20d=%22M50%205C25%205%205%2025%205%2050C5%2063%2010%2074%2019%2082C10%2057%2024%2031%2050%2028C66%2026%2077%2031%2087%2040C82%2020%2067%205%2050%205Z%20M50%2095C75%2095%2095%2075%2095%2050C95%2037%2090%2026%2081%2018C90%2043%2076%2069%2050%2072C34%2074%2023%2069%2013%2060C18%2080%2033%2095%2050%2095Z%22/%3E%3C/g%3E%3C/svg%3E'
 
 
@@ -533,6 +614,8 @@ menu.addEventListener('click',async e=>{
   const upd=e.target.closest('[data-bell-update]');
   if(!upd||upd.disabled)return;
   const target=upd.dataset.bellUpdate;
+  setOpen(false);
+  if(window.ONYXPanelModal){ONYXPanelModal.confirmAndStart(target);return}
   if(!(await onyxConfirm('Установить версию '+short(target)+'? Будет создана резервная копия. Панель и подключения могут временно прерваться.',{title:'Установка обновления',ok:'Обновить'})))return;
   upd.disabled=true;
   try{
@@ -543,6 +626,9 @@ menu.addEventListener('click',async e=>{
   }catch(err){onyxToast(err.message||'Ошибка обновления.','err');upd.disabled=false}
 });
 load();setInterval(load,30000);
+// Автопроверка новой версии панели раз в 10 минут: сервер сам троттлит проверку,
+// здесь просто раз в 10 минут просим его посмотреть репозиторий и обновляем колокольчик.
+setInterval(async()=>{if(document.hidden)return;try{await fetch(PATH+'/update-check',{method:'POST',body:new URLSearchParams({csrf:CSRF})})}catch(e){}load()},600000);
 })();
 </script>'''
 
@@ -557,7 +643,7 @@ def page_layout(title, body, path, active, domain, csrf='', role='admin'):
         nav += f'<a class="nav-button{state}" href="{esc(path)}/{key}" data-tip="{label}" aria-label="{label}"{current}>{icon(glyph)}</a>'
     banner = f'''<aside id="releaseBanner" class="release-banner" role="status" hidden><span class="release-banner-mark">{icon('refresh')}</span><div class="release-banner-copy"><b>Доступна новая версия Onyx Panel</b><small>Обновление можно установить с автоматической резервной копией</small></div><span id="releaseBannerVersion" class="release-banner-version"></span><div class="release-banner-actions"><a class="btn primary" href="{esc(path)}/updates">Посмотреть</a><button type="button" id="releaseBannerClose" class="release-banner-close" aria-label="Скрыть уведомление">×</button></div></aside>'''
     banner_script = f'''<script>(()=>{{const banner=document.getElementById('releaseBanner'),version=document.getElementById('releaseBannerVersion'),close=document.getElementById('releaseBannerClose');if(!banner)return;function dismissed(v){{try{{return localStorage.getItem('onyx-release-banner:'+v)==='1'}}catch(e){{return false}}}}function show(d){{if(!d||!d.available||!d.latest||dismissed(d.latest)){{banner.hidden=true;return}}banner.dataset.version=d.latest;version.textContent=(d.current||'—')+' → '+d.latest;banner.hidden=false}}async function check(){{try{{const r=await fetch('{esc(path)}/update-status',{{cache:'no-store'}});if(r.ok&&!r.redirected)show(await r.json())}}catch(e){{}}}}close.addEventListener('click',()=>{{const v=banner.dataset.version;if(v)try{{localStorage.setItem('onyx-release-banner:'+v,'1')}}catch(e){{}}banner.hidden=true}});window.addEventListener('onyx-update-status',e=>show(e.detail));check();setInterval(check,30000)}})();</script>'''
-    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#252526"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/svg+xml" href="{FAVICON_MARK}"><style>{CSS}</style></head><body data-role="{esc(role)}"><div class="shell"><aside class="sidebar" aria-label="Навигация панели"><a class="brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel — на главную"><img src="{esc(path)}/__logo" alt="" width="30" height="30"></a><nav class="nav-primary" aria-label="Разделы панели">{nav}</nav><div class="nav-bottom">{restart_buttons(path, csrf)}<a class="nav-button" href="{esc(path)}/logout" data-tip="Выйти" aria-label="Выйти">{icon('logout')}</a></div></aside><main>{banner}{body}</main></div><template id="headCluster">{bell_button(path, csrf, role)}<button type="button" class="head-search" data-head-search aria-label="Поиск (Ctrl+K)" title="Поиск (Ctrl+K)">{icon('search')}</button><span class="head-avatar" title="Onyx Panel"><img src="{esc(path)}/__logo" alt="" width="22" height="22"></span></template><dialog id="paletteDialog" class="palette-dialog" aria-label="Командная палитра"><div class="palette-box"><input id="paletteInput" placeholder="Поиск: разделы, клиенты, действия…" autocomplete="off" spellcheck="false"><div id="paletteResults" class="palette-results" role="listbox"></div><div class="palette-hint">Ctrl+K — открыть · ↑↓ — выбрать · Enter — перейти · Esc — закрыть</div></div></dialog>{COMMON_JS}{HEAD_MOVE_JS}{PALETTE_JS.replace('@@PATH@@',json.dumps(path))}{BELL_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',esc(csrf))}{banner_script}</body></html>'''
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#252526"><title>{esc(title)} · Onyx Panel</title><link rel="icon" type="image/svg+xml" href="{FAVICON_MARK}"><style>{CSS}</style></head><body data-role="{esc(role)}"><div class="shell"><aside class="sidebar" aria-label="Навигация панели"><a class="brand" href="{esc(path)}/dashboard" aria-label="Onyx Panel — на главную"><img src="{esc(path)}/__logo" alt="" width="30" height="30"></a><nav class="nav-primary" aria-label="Разделы панели">{nav}</nav><div class="nav-bottom">{restart_buttons(path, csrf)}<a class="nav-button" href="{esc(path)}/logout" data-tip="Выйти" aria-label="Выйти">{icon('logout')}</a></div></aside><main>{banner}{body}</main></div><template id="headCluster">{bell_button(path, csrf, role)}<button type="button" class="head-search" data-head-search aria-label="Поиск (Ctrl+K)" title="Поиск (Ctrl+K)">{icon('search')}</button><span class="head-avatar" title="Onyx Panel"><img src="{esc(path)}/__logo" alt="" width="22" height="22"></span></template><dialog id="paletteDialog" class="palette-dialog" aria-label="Командная палитра"><div class="palette-box"><input id="paletteInput" placeholder="Поиск: разделы, клиенты, действия…" autocomplete="off" spellcheck="false"><div id="paletteResults" class="palette-results" role="listbox"></div><div class="palette-hint">Ctrl+K — открыть · ↑↓ — выбрать · Enter — перейти · Esc — закрыть</div></div></dialog>{COMMON_JS}{HEAD_MOVE_JS}{PALETTE_JS.replace('@@PATH@@',json.dumps(path))}{PANEL_MODAL_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',json.dumps(csrf))}{BELL_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',esc(csrf))}{banner_script}</body></html>'''
 
 
 def login_ui(path, totp=False):
