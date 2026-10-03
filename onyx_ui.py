@@ -63,7 +63,8 @@ def icon(name):
              'youtube': '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z"/>',
              'menu': '<path d="M4 7h16M4 12h16M4 17h16"/>',
              'bell': '<path d="M6 9a6 6 0 0 1 12 0c0 7 3 7 3 8H3c0-1 3-1 3-8Z"/><path d="M9 21h6"/>',
-             'plus': '<path d="M12 5v14M5 12h14"/>'}
+             'plus': '<path d="M12 5v14M5 12h14"/>',
+             'warp': '<path d="M6.5 18a4.5 4.5 0 1 1 .9-8.9A6 6 0 0 1 19 10.5 3.75 3.75 0 0 1 18 18Z"/><path d="M12 12v6m0 0-2.2-2.2M12 18l2.2-2.2"/>'}
     return '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths.get(name, paths['grid'])+'</svg>'
 
 
@@ -772,7 +773,7 @@ def node_pills(record):
     return '<div class="node-pills">'+''.join('<span class="pill node-pill">'+esc(n)+'</span>' for n in names)+'</div>'
 
 
-def client_records(subs, profiles, traffic, domain, proxy_link, expires=None, node_summary=None):
+def client_records(subs, profiles, traffic, domain, proxy_link, expires=None, node_summary=None, warp_ids=None):
     records=[]
     for s in live_subscriptions(subs,profiles):
         totals=aggregate(s.get('profile_ids',[]),traffic,s.get('enabled',True))
@@ -812,6 +813,11 @@ def client_records(subs, profiles, traffic, domain, proxy_link, expires=None, no
                 r['node_names']=rec['nodes']
     # Newest clients — subscriptions, direct links and OpenFlux alike — always
     # land at the bottom of the list; stable sort keeps grouped ties in place.
+    if warp_ids is not None:
+        for r in records:
+            source=r.get('source') or {}
+            ids=source.get('profile_ids') or [source.get('id',r['id'])]
+            r['warp']=bool(warp_ids.intersection([str(i) for i in ids]))
     records.sort(key=lambda r:int(r.get('created') or 0))
     return records
 
@@ -858,8 +864,12 @@ def openflux_create_dialog(path, csrf):
     return markup[markup.index('<dialog id="newOpenFlux"'):]
 
 
-def users_ui(subs, profiles, traffic, path, domain, csrf, proxy_link, openflux_profiles=None, expires=None, node_summary=None):
-    records=client_records(subs,profiles,traffic,domain,proxy_link,expires,node_summary=node_summary)
+def users_ui(subs, profiles, traffic, path, domain, csrf, proxy_link, openflux_profiles=None, expires=None, node_summary=None, warp_ready=False, warp_ids=None):
+    records=client_records(subs,profiles,traffic,domain,proxy_link,expires,node_summary=node_summary,warp_ids=warp_ids if warp_ready else None)
+    # The WARP toggle appears only when WARP is configured on the routing tab;
+    # web/mtproto/awg traffic does not pass through Xray, so those clients
+    # have no toggle at all.
+    warp_ready=bool(warp_ready)
     # The primary WEB Proxy is the installation core, not a managed client: it
     # keeps working as before but is not listed, so counts match what the
     # operator actually manages.
@@ -877,7 +887,13 @@ def users_ui(subs, profiles, traffic, path, domain, csrf, proxy_link, openflux_p
                 'port':r['source'].get('backend_port',443) if proto in ('hysteria','mtproto') else 443}))
         disabled='disabled title="Основное подключение установки"' if primary else ''
         state=f'<button class="access-switch" type="button" role="switch" aria-label="Доступ — {name}" aria-checked="{str(bool(enabled)).lower()}" data-state="{sid}" data-kind="{kind}" {disabled}></button>'
-        action=f'<button class="icon-btn" {qr_attributes(qr,r["name"],r["link"],r["protocols"],kind,user_port=r["source"].get("backend_port"))} aria-label="QR — {name}" title="QR">{icon("qr")}</button><button class="icon-btn" data-copy="{esc(r["link"])}" aria-label="Скопировать — {name}" title="Копировать">{icon("copy")}</button><button class="icon-btn" data-open-client="{sid}" aria-label="Настройки — {name}" title="Настройки">{icon("edit")}</button>'
+        warp_btn=''
+        if warp_ready and set(r['protocols']) & {'vless','hysteria'} and r.get('warp') is not None:
+            on=' on' if r.get('warp') else ''
+            warp_btn=(f'<button type="button" class="icon-btn warp-btn{on}" data-warp="{sid}"'
+                      f' aria-pressed="{str(bool(r.get("warp"))).lower()}" aria-label="Выход через WARP — {name}"'
+                      f' title="Выход через WARP">{icon("warp")}</button>')
+        action=warp_btn+f'<button class="icon-btn" {qr_attributes(qr,r["name"],r["link"],r["protocols"],kind,user_port=r["source"].get("backend_port"))} aria-label="QR — {name}" title="QR">{icon("qr")}</button><button class="icon-btn" data-copy="{esc(r["link"])}" aria-label="Скопировать — {name}" title="Копировать">{icon("copy")}</button><button class="icon-btn" data-open-client="{sid}" aria-label="Настройки — {name}" title="Настройки">{icon("edit")}</button>'
         if not primary:
             route='subscription-action' if sub else 'delete-user'
             action+=f'<form method="post" action="{esc(path)}/{route}" data-confirm="Удалить клиента {name} и его ключи?">{hidden(csrf,id=uid,**({"operation":"delete"} if sub else {}))}<button class="icon-btn danger" aria-label="Удалить — {name}" title="Удалить">{icon("trash")}</button></form>'
@@ -1082,6 +1098,9 @@ dialog{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 
 # Full mobile adaptation: dialogs must always scroll, inputs must not trigger
 # iOS focus zoom, and touch targets stay comfortable on every device.
+CSS += '''.warp-btn.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}.warp-btn.on .ico{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 45%,transparent))}
+'''
+
 CSS += '''
 @media(max-width:740px){
   /* iOS auto-zooms a focused field whose effective font-size is under
@@ -1424,11 +1443,13 @@ function confirmClientAccess(message){const d=document.getElementById('accessCon
 async function setAccess(rows,value,ask=false){if(changing||!rows.length)return;if(ask&&!await confirmClientAccess((value?'Включить':'Отключить')+' доступ для '+rows.length+' клиент(а/ов)? Соединения могут кратковременно прерваться.'))return;const previous=rows.map(r=>({enabled:r.dataset.enabled,active:r.dataset.active}));rows.forEach(r=>{paintAccess(r,Boolean(value),false);r.classList.add('client-pending')});lockClients(true);notice.hidden=false;let done=0;try{for(const r of rows){notice.textContent='Применение: '+(done+1)+' / '+rows.length;await requestClient({id:r.dataset.id,kind:r.dataset.kind,operation:'state',enabled:String(value)});done++}notice.textContent='Готово. Доступ изменён без перезагрузки страницы.';allRows.forEach(r=>{const c=r.querySelector('[data-select-client]');if(c)c.checked=false});selection()}catch(e){for(let i=done;i<rows.length;i++)paintAccess(rows[i],previous[i].enabled==='1',previous[i].active==='1');notice.textContent='Применено '+done+' из '+rows.length+'. '+e.message}finally{rows.forEach(r=>r.classList.remove('client-pending'));lockClients(false)}}
 document.querySelectorAll('[data-state]').forEach(b=>b.addEventListener('click',()=>setAccess([b.closest('[data-client]')],b.getAttribute('aria-checked')==='true'?0:1)));document.querySelectorAll('[data-bulk]').forEach(b=>b.addEventListener('click',()=>setAccess(selected(),Number(b.dataset.bulk),true)));
 document.querySelectorAll('[data-secret-reveal]').forEach(b=>b.addEventListener('click',()=>{const field=document.getElementById(b.dataset.secretReveal),show=field.type==='password';field.type=show?'text':'password';b.textContent=show?'Скрыть':'Показать'}));
+async function requestWarp(fields){const r=await fetch(clientPath+'/warp-user',{method:'POST',body:new URLSearchParams({csrf:clientCsrf,...fields})});if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');let d;try{d=await r.json()}catch(e){throw new Error('Панель вернула некорректный ответ.')}if(!r.ok||!d.ok)throw new Error(d.message||'Изменение не применено');return d}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-warp]');if(!b||b.disabled)return;e.preventDefault();const on=b.getAttribute('aria-pressed')==='true';b.disabled=true;try{const d=await requestWarp({id:b.dataset.warp,enabled:on?'0':'1'});b.classList.toggle('on',!on);b.setAttribute('aria-pressed',String(!on));if(window.onyxToast)onyxToast(d.message||'Готово')}catch(err){if(window.onyxToast)onyxToast(err.message,'err')}finally{b.disabled=false}});
 document.querySelectorAll('form[data-client-action]').forEach(f=>f.addEventListener('submit',async e=>{e.preventDefault();if(changing||(f.dataset.clientConfirm&&!(await onyxConfirm(f.dataset.clientConfirm,{danger:true}))))return;const p=f.querySelector('[data-form-status]'),b=f.querySelector('button[type="submit"],button:not([type])'),fields=Object.fromEntries(new FormData(f));b.disabled=true;changing=true;try{await requestClient(fields);const row=allRows.find(r=>r.dataset.id===fields.id);if(fields.operation==='rename'&&row){row.dataset.name=fields.name.trim();row.querySelector('.client-name strong').textContent=fields.name.trim();list()}if(fields.operation==='expiry'&&row){const pill=row.querySelector('.expiry-pill');if(pill){if(fields.expires){pill.hidden=false;pill.textContent='до '+fields.expires.split('-').reverse().join('.');pill.classList.toggle('expired',new Date(fields.expires+'T23:59:59').getTime()<Date.now())}else{pill.hidden=true}}}p.textContent=fields.operation==='secret'?'Секрет сохранён.':'Изменение сохранено.'}catch(err){p.textContent=err.message}finally{b.disabled=false;changing=false}}));
 document.addEventListener('submit',async e=>{const form=e.target.closest('form');if(!form||form===createForm||form.matches('[data-client-action]'))return;const action=new URL(form.action,location.href).pathname;if(!['/delete-user','/subscription-action','/openflux-profile'].some(s=>action.endsWith(s)))return;e.preventDefault();e.stopImmediatePropagation();if(form.dataset.confirm&&!(await onyxConfirm(form.dataset.confirm,{danger:true})))return;const fields=Object.fromEntries(new FormData(form)),operation=String(fields.operation||''),rawId=String(fields.id||''),row=form.closest('[data-client]')||allRows.find(r=>r.dataset.id===(action.endsWith('/openflux-profile')?'openflux-'+rawId:rawId)),button=form.querySelector('button[type="submit"],button:not([type])');if(button)button.disabled=true;if(row)row.classList.add('client-pending');notice.hidden=false;notice.textContent=operation==='delete'||action.endsWith('/delete-user')?'Удаляем клиента…':'Применяем изменение…';try{await requestForm(form);const deleting=operation==='delete'||action.endsWith('/delete-user');if(deleting&&row){removeClientRow(row);notice.textContent='Клиент удалён.'}else if(row&&action.endsWith('/openflux-profile')&&(operation==='enable'||operation==='disable')){const enabled=operation==='enable';row.classList.remove('client-pending');paintAccess(row,enabled,enabled);const input=form.querySelector('[name=operation]');if(input)input.value=enabled?'disable':'enable';if(button)button.disabled=false;notice.textContent='Состояние OpenFlux изменено.'}else{notice.textContent='Готово. Обновляем список…';location.reload();return}}catch(error){if(row)row.classList.remove('client-pending');if(button)button.disabled=false;notice.textContent=error.message}},true);
 document.getElementById('copySelected').addEventListener('click',async()=>{const links=selected().map(r=>r.dataset.link).join('\\n');try{await navigator.clipboard.writeText(links);notice.textContent='Ссылки выбранных клиентов скопированы.'}catch(e){notice.textContent='Браузер не разрешил копирование. Используйте кнопки в строках.'}notice.hidden=false});list();if(location.hash.startsWith('#account-')){const a=document.getElementById(location.hash.slice(1));if(a&&a.closest('dialog'))a.closest('dialog').showModal()}
 function bytes(value){let n=Math.max(0,Number(value)||0);for(const u of ['Б','КБ','МБ','ГБ','ТБ']){if(n<1024||u==='ТБ')return (u==='Б'?n.toFixed(0):n.toFixed(1))+' '+u;n/=1024}}
-let polling=false;async function pollClients(){if(polling||changing||selected().length||document.querySelector('dialog:modal'))return;polling=true;try{const response=await fetch(clientPath+'/clients-state',{cache:'no-store'});if(response.redirected)throw new Error('Сессия завершена. Войдите заново.');if(!response.ok)throw new Error('Статистика не обновляется. Проверьте связь с панелью.');const data=await response.json();if(changing||selected().length||document.querySelector('dialog:modal'))return;const records=data.clients;if(records.length!==allRows.length||records.some(c=>!allRows.some(r=>r.dataset.id===c.id&&r.dataset.name===c.name&&r.dataset.protocols===c.protocols.join(' ')))){notice.hidden=false;notice.textContent='Данные клиентов изменились. Обновите страницу.';return}for(const c of records){const row=allRows.find(r=>r.dataset.id===c.id),total=c.up+c.down,flux=c.kind==='openflux';if(c.kind==='subscription'){const cell=row.querySelector('.hwid-cell');cell.firstChild.textContent=c.limit?c.devices+' / '+c.limit:'Без лимита';cell.querySelector('small').textContent=c.limit?'HWID':'Без привязки'}row.dataset.enabled=c.enabled?'1':'0';row.dataset.active=c.active?'1':'0';row.dataset.traffic=String(total);const access=row.querySelector('[role=switch]');if(access)access.setAttribute('aria-checked',c.enabled?'true':'false');row.querySelectorAll('.badge').forEach(badge=>{badge.classList.toggle('on',c.active&&c.enabled);badge.textContent=!c.enabled?'Отключена':flux?(c.active?'Работает':'Остановлен'):(c.active?'Передаёт трафик':'Нет трафика')});if(!flux){row.querySelector('.traffic-cell b').textContent=bytes(total);row.querySelector('.traffic-cell small').textContent='↑ '+bytes(c.up)+' · ↓ '+bytes(c.down);row.querySelector('.traffic-split .up').style.width=(total?c.up/total*100:0)+'%';row.querySelector('.traffic-split .down').style.width=(total?c.down/total*100:0)+'%'}}const counts=[records.length,records.filter(c=>c.active).length,records.filter(c=>c.kind==='subscription').length,bytes(records.reduce((n,c)=>n+c.up+c.down,0))];document.querySelectorAll('.client-stat b').forEach((b,i)=>b.textContent=counts[i]);list()}catch(err){notice.hidden=false;notice.textContent=err.message}finally{polling=false}}
+let polling=false;async function pollClients(){if(polling||changing||selected().length||document.querySelector('dialog:modal'))return;polling=true;try{const response=await fetch(clientPath+'/clients-state',{cache:'no-store'});if(response.redirected)throw new Error('Сессия завершена. Войдите заново.');if(!response.ok)throw new Error('Статистика не обновляется. Проверьте связь с панелью.');const data=await response.json();if(changing||selected().length||document.querySelector('dialog:modal'))return;const records=data.clients;if(records.length!==allRows.length||records.some(c=>!allRows.some(r=>r.dataset.id===c.id&&r.dataset.name===c.name&&r.dataset.protocols===c.protocols.join(' ')))){notice.hidden=false;notice.textContent='Данные клиентов изменились. Обновите страницу.';return}for(const c of records){const row=allRows.find(r=>r.dataset.id===c.id),total=c.up+c.down,flux=c.kind==='openflux';if(c.kind==='subscription'){const cell=row.querySelector('.hwid-cell');cell.firstChild.textContent=c.limit?c.devices+' / '+c.limit:'Без лимита';cell.querySelector('small').textContent=c.limit?'HWID':'Без привязки'}row.dataset.enabled=c.enabled?'1':'0';row.dataset.active=c.active?'1':'0';row.dataset.traffic=String(total);const access=row.querySelector('[role=switch]');if(access)access.setAttribute('aria-checked',c.enabled?'true':'false');row.querySelectorAll('.badge').forEach(badge=>{badge.classList.toggle('on',c.active&&c.enabled);badge.textContent=!c.enabled?'Отключена':flux?(c.active?'Работает':'Остановлен'):(c.active?'Передаёт трафик':'Нет трафика')});const wb=row.querySelector('[data-warp]');if(wb&&typeof c.warp==='boolean'){wb.classList.toggle('on',c.warp);wb.setAttribute('aria-pressed',String(c.warp))}if(!flux){row.querySelector('.traffic-cell b').textContent=bytes(total);row.querySelector('.traffic-cell small').textContent='↑ '+bytes(c.up)+' · ↓ '+bytes(c.down);row.querySelector('.traffic-split .up').style.width=(total?c.up/total*100:0)+'%';row.querySelector('.traffic-split .down').style.width=(total?c.down/total*100:0)+'%'}}const counts=[records.length,records.filter(c=>c.active).length,records.filter(c=>c.kind==='subscription').length,bytes(records.reduce((n,c)=>n+c.up+c.down,0))];document.querySelectorAll('.client-stat b').forEach((b,i)=>b.textContent=counts[i]);list()}catch(err){notice.hidden=false;notice.textContent=err.message}finally{polling=false}}
 setInterval(pollClients,5000);
 (function(){
 const MONTHS=["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
@@ -1847,6 +1868,34 @@ if(sw)sw.addEventListener('click',async()=>{
     if(window.onyxToast)onyxToast(res.message||'Сохранено — применяется в фоне…');}
   catch(e){sw.setAttribute('aria-checked',previous);if(window.onyxToast)onyxToast(e.message,'err')}
   finally{sw.disabled=false}});
+async function warpPost(operation,extra){const body=new URLSearchParams({csrf:CSRF,operation,...(extra||{})});
+  const r=await fetch(PATH+'/routing-warp',{method:'POST',headers:{'X-Onyx-Async':'1'},body});
+  if(r.redirected)throw new Error('Сессия завершена. Войдите заново.');
+  let res;try{res=await r.json()}catch(e){throw new Error('Панель вернула некорректный ответ.')}
+  if(!r.ok||!res.ok)throw new Error(res.message||'Операция не выполнена.');
+  return res}
+const warpCard=document.getElementById('warpCard');
+if(warpCard){
+  warpCard.querySelectorAll('[data-warp-action]').forEach(b=>b.addEventListener('click',async()=>{
+    if(b.disabled)return;
+    const op=b.dataset.warpAction;
+    if(op==='disable'&&window.onyxConfirm&&!(await onyxConfirm('Удалить конфигурацию WARP? Включённым клиентам вернётся обычный выход с сервера.',{danger:true})))return;
+    b.disabled=true;const old=b.innerHTML;b.textContent='…';
+    try{const res=await warpPost(op);
+      if(op==='disable')location.reload();
+      else{const st=warpCard.querySelector('[data-warp-status]');
+        if(op==='test'&&res.exit_ip&&st)st.textContent='Выходной IP: '+res.exit_ip+' · проверено только что';
+        if(window.onyxToast)onyxToast(res.message||'Готово')}}
+    catch(e){if(window.onyxToast)onyxToast(e.message,'err')}
+    finally{b.disabled=false;b.innerHTML=old}}));
+  const apply=warpCard.querySelector('[data-warp-config-apply]');
+  if(apply)apply.addEventListener('click',async()=>{
+    const ta=warpCard.querySelector('[data-warp-config]');
+    if(!ta||!ta.value.trim()){if(window.onyxToast)onyxToast('Вставьте содержимое WireGuard-конфига.','err');return}
+    if(apply.disabled)return;apply.disabled=true;const old=apply.innerHTML;apply.textContent='Применяю…';
+    try{await warpPost('config',{config:ta.value});location.reload()}
+    catch(e){if(window.onyxToast)onyxToast(e.message,'err')}
+    finally{apply.disabled=false;apply.innerHTML=old}})}
 })();
 </script>'''
 
@@ -1862,9 +1911,22 @@ def _chip_editor(list_key, presets, values, placeholder):
             f'<button type="button" class="routing-add-btn">Добавить</button></div></div>')
 
 
-def routing_ui(routing, path, csrf, domain):
+def routing_ui(routing, path, csrf, domain, warp=None):
     routing = routing or {}
     torrents_enabled=bool(routing.get('block_torrents'))
+    warp = warp or {}
+    warp_ready=bool(warp.get('private_key'))
+    warp_exit_ip=str(warp.get('exit_ip','') or '')
+    checked=int(warp.get('checked_at') or 0)
+    if not warp_ready:
+        warp_status='WARP не настроен. Зарегистрируйте устройство Cloudflare или вставьте конфиг от wgcf.'
+        warp_pill='не настроен'
+    else:
+        age=(time.time()-checked) if checked else None
+        when=(' · проверено '+duration(int(age))+' назад') if age is not None and age>=0 else ''
+        warp_status=('Выходной IP: '+esc(warp_exit_ip)+when) if warp_exit_ip else 'Туннель зарегистрирован — нажмите «Проверить выход», чтобы увидеть IP Cloudflare.'
+        warp_pill=('выход '+warp_exit_ip) if warp_exit_ip else 'настроен'
+    warp_buttons=('<button type="button" class="primary" data-warp-action="register">{icon}Зарегистрировать WARP</button>').format(icon=icon('warp')) if not warp_ready else ('<button type="button" data-warp-action="test">{icon}Проверить выход</button><button type="button" class="danger" data-warp-action="disable">{icon}Отключить WARP</button>').format(icon=icon('refresh'))
     banner='<p class="note"><b>Прямое соединение</b> означает, что определённый трафик не будет перенаправлен через другой сервер. Правила из этой вкладки проверяются <b>до</b> каскада: совпавший трафик всегда уходит с этого сервера напрямую. При сохранении правила автоматически применяются и к подключённым нодам — трафик, который выходит через ноду, следует той же политике.</p>'
     ip_editor=_chip_editor('direct_ips',ROUTING_IP_PRESETS,routing.get('direct_ips',[]),'geoip:cn, 1.2.3.4 или 10.0.0.0/8')
     domain_editor=_chip_editor('direct_domains',ROUTING_DOMAIN_PRESETS,routing.get('direct_domains',[]),'domain:example.com, geosite:cn')
@@ -1874,6 +1936,13 @@ def routing_ui(routing, path, csrf, domain):
 <div class="routing-row"><div><h3>Прямые IP-адреса</h3><small>Трафик на эти адреса и сети уходит напрямую, минуя каскад. Пресеты добавляют geoip-списки Xray.</small></div>{ip_editor}</div>
 <div class="routing-row"><div><h3>Прямые домены</h3><small>Домены в формате Xray: domain:example.com, geosite:cn или regexp:… Совпавшие запросы идут напрямую.</small></div>{domain_editor}</div>
 <div class="routing-row"><div><h3>Правила IPv4</h3><small>Эти параметры позволяют клиентам обращаться к перечисленным доменам только через IPv4.</small></div>{ipv4_editor}</div>
+</section>
+<section class="card" id="warpCard">
+<div class="card-title"><div><h2>Выход через WARP</h2><p>Не-хостинговый IP Cloudflare для выбранных клиентов</p></div><span class="pill" data-warp-pill>{esc(warp_pill)}</span></div>
+<p class="note" data-warp-status role="status">{warp_status}</p>
+<div class="actions">{warp_buttons}</div>
+<details class="warp-manual"><summary>Вставить WireGuard-конфиг вручную (wgcf)</summary><textarea data-warp-config rows="5" spellcheck="false" autocomplete="off" placeholder="[Interface]&#10;PrivateKey = …&#10;Address = 172.16.0.2/32&#10;&#10;[Peer]&#10;PublicKey = …&#10;Endpoint = engage.cloudflareclient.com:2408"></textarea><div class="actions"><button type="button" class="primary" data-warp-config-apply>Применить конфиг</button></div></details>
+<p class="muted" style="font-size:10.5px;margin:12px 0 0">Включение по клиентам — кнопкой-облаком в списке «Клиенты» (VLESS и Hysteria2). Сила правил: блок торрентов и прямые списки → WARP → каскады. Действует для подключений к этой панели; на нодах WARP не применяется.</p>
 </section>
 <section class="card"><div class="card-title"><h2>Блокировки</h2></div><div class="routing-row" style="border-top:0;padding-top:4px"><div><h3>Заблокировать Торренты</h3><small>BitTorrent-трафик распознаётся сниффером Xray и блокируется. Работает для VLESS и Hysteria2.</small></div><div class="routing-switch-row"><button type="button" class="access-switch" data-routing-torrent role="switch" aria-label="Заблокировать торренты" aria-checked="{str(torrents_enabled).lower()}" title="{'Выключить блокировку торрентов' if torrents_enabled else 'Включить блокировку торрентов'}"></button></div></div></section>{ROUTING_JS.replace('@@PATH@@',json.dumps(path)).replace('@@CSRF@@',json.dumps(csrf))}'''
 

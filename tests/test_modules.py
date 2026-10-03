@@ -226,6 +226,47 @@ assert reloaded['direct_ips'] == norm['direct_ips'] and reloaded['block_torrents
 assert onyx_routing.load(routing_tmp + '.missing') == onyx_routing.normalize({})
 print('ROUTING OK')
 
+# ---- WARP: X25519 (RFC 7748 §6.1), парсер конфига, форма правил для Xray
+import onyx_warp
+alice_priv = bytes.fromhex('77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a')
+assert onyx_warp._x25519_base(alice_priv).hex() == \
+    '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a'
+priv_key, pub_key = onyx_warp.keypair()
+assert onyx_warp.KEY_RE.match(priv_key) and onyx_warp.KEY_RE.match(pub_key)
+assert onyx_warp._x25519_base(bytes.fromhex(base64.b64decode(priv_key).hex())).hex() == \
+    base64.b64decode(pub_key).hex()          # pubkey = base * priv
+
+warp_tmp = str(Path(tempfile.mkdtemp()) / 'warp.json')
+wgconf = ('[Interface]\nPrivateKey = %s\nAddress = 172.16.0.2/32, fd01::2/128\n'
+          'DNS = 1.1.1.1\n\n[Peer]\nPublicKey = %s\nAllowedIPs = 0.0.0.0/0\n'
+          'Endpoint = engage.cloudflareclient.com:2408\n' % (priv_key, pub_key))
+state = onyx_warp.import_config(warp_tmp, wgconf)
+assert state['private_key'] == priv_key and state['address'] == '172.16.0.2'
+assert state['endpoint'] == 'engage.cloudflareclient.com:2408' and state['users'] == []
+for bad in ('[Interface]\nPrivateKey = short\n', '[Peer]\nPublicKey = ' + pub_key,
+            '[Interface]\nPrivateKey = %s\n' % priv_key +
+            '[Peer]\nPublicKey = %s\nEndpoint = bad host:port\n' % pub_key):
+    try:
+        onyx_warp.import_config(warp_tmp, bad); raise SystemExit('should fail')
+    except onyx_warp.WarpError:
+        pass
+
+outbounds, rules = onyx_warp.xray_additions(state, ['aabbccddeeff0011'])
+assert outbounds[0]['tag'] == 'warp' and outbounds[0]['protocol'] == 'wireguard'
+assert outbounds[0]['settings']['peers'][0]['endpoint'] == 'engage.cloudflareclient.com:2408'
+assert rules[0]['user'] == ['panel:aabbccddeeff0011'] and rules[0]['outboundTag'] == 'warp'
+assert onyx_warp.xray_additions(state, []) == ([], [])
+assert not onyx_warp.configured(onyx_warp.load(warp_tmp + '.missing'))
+
+onyx_warp.set_users(warp_tmp, ['aabbccddeeff0011', '1122334455667788'], True)
+assert onyx_warp.has_users(warp_tmp, ['aabbccddeeff0011'])
+onyx_warp.set_users(warp_tmp, ['aabbccddeeff0011'], False)
+assert not onyx_warp.has_users(warp_tmp, ['aabbccddeeff0011'])
+assert onyx_warp.has_users(warp_tmp, ['1122334455667788'])
+onyx_warp.reset(warp_tmp)
+assert not onyx_warp.configured(onyx_warp.load(warp_tmp))
+print('WARP OK')
+
 # ---- Python 3.10 grammar check (Ubuntu 22.04 target): no 3.12+ f-string syntax
 import ast
 import glob
