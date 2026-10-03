@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.9.4..."
+    echo "Updating Onyx Panel 1.9.5..."
 else
-    echo "Configuring Onyx Panel 1.9.4..."
+    echo "Configuring Onyx Panel 1.9.5..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -941,7 +941,7 @@ def _xray_traffic():
     result={}
     if run("systemctl","is-active","--quiet",XRAY_SERVICE).returncode:
         return result
-    p=run(XRAY_BIN,"api","statsquery","--server="+XRAY_API,timeout=15)
+    p=run(XRAY_BIN,"api","statsquery","--server="+XRAY_API,timeout=8)
     if p.returncode: return result
     try:
         start=p.stdout.find("{")
@@ -1490,11 +1490,11 @@ EOF
 
 cat > /etc/systemd/system/onyx-panel-traffic.timer <<'EOF'
 [Unit]
-Description=Collect Onyx Panel traffic every 10 seconds
+Description=Collect Onyx Panel traffic every 5 seconds
 
 [Timer]
-OnActiveSec=5s
-OnUnitInactiveSec=10s
+OnActiveSec=2s
+OnUnitInactiveSec=5s
 AccuracySec=1s
 Unit=onyx-panel-traffic.service
 
@@ -2350,7 +2350,7 @@ def refresh_nodes_live():
         with NODES_LIVE_LOCK:
             NODES_LIVE["fetching"]=False
 
-def nodes_live(max_age=15):
+def nodes_live(max_age=10):
     """Cached node snapshots; a background refresh runs at most every max_age seconds."""
     with NODES_LIVE_LOCK:
         stamp=float(NODES_LIVE.get("stamp",0.0))
@@ -2633,7 +2633,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.9.4","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.5","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -4448,7 +4448,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.9.4
+Description=Onyx Panel 1.9.5
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -5004,9 +5004,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.9.4 UPDATED"
+echo "          Onyx Panel 1.9.5 UPDATED"
 else
-echo "         Onyx Panel 1.9.4 IS READY"
+echo "         Onyx Panel 1.9.5 IS READY"
 fi
 echo "============================================================"
 echo
