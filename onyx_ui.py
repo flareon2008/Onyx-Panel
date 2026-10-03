@@ -978,12 +978,14 @@ function patch(nodes){{
   cards().forEach(card=>{{
     const s=byId[card.dataset.nodeId];if(!s)return;
     const badge=card.querySelector('[data-node-badge]');
-    if(badge){{
+    // Патчим бейдж только когда срез содержит поля состояния: ответ без
+    // enabled не должен переписывать рабочий бейдж на «Отключена».
+    if(badge&&typeof s.enabled==='boolean'){{
       const [cls,label]=!s.enabled?['','Отключена']:!s.online?['','Нет связи']:s.outdated?['warn','Требуется обновление']:['on','Подключена'];
       badge.className='badge'+(cls?' '+cls:'');badge.textContent=label;
     }}
     const ver=card.querySelector('[data-node-version]');
-    if(ver&&s.version)ver.textContent=s.version;
+    if(ver&&typeof s.version==='string'&&s.version)ver.textContent=s.version;
     const live=card.querySelector('[data-node-live]');
     if(live&&typeof s.html==='string'){{
       if(live.innerHTML!==s.html)live.innerHTML=s.html;
