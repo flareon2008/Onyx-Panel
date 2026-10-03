@@ -344,6 +344,15 @@ input[type=checkbox]{accent-color:var(--accent)}
 .node-glance-name strong{font-size:13px;overflow-wrap:anywhere}
 .node-glance-name small{display:block;margin-top:2px;color:var(--muted);font:9px var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .node-glance-head>.badge{margin-left:auto}
+.node-glance-head{cursor:pointer;user-select:none;-webkit-user-select:none}
+.node-glance-head:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.node-glance-chevron{display:grid;place-items:center;flex:0 0 auto;width:26px;height:26px;border:1px solid var(--line);border-radius:8px;background:var(--input);color:var(--muted)}
+.node-glance-chevron .ico{width:14px;height:14px;transition:transform .18s ease}
+.node-glance-head:hover .node-glance-chevron{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.node-glance.expanded .node-glance-chevron .ico{transform:rotate(180deg)}
+.node-glance .node-glance-body{display:none}
+.node-glance.expanded .node-glance-body{display:block}
+.node-glance.offline .node-glance-body{margin:0}
 .node-glance-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
 .node-glance-stats>div{padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--input)}
 .node-glance-stats span{display:block;font-size:9px;color:var(--muted)}
@@ -1550,6 +1559,22 @@ def chart(history, hours, node_series=None):
     return '<svg viewBox="0 0 810 220" role="img" aria-label="Скорость трафика прокси за выбранный период">'+grid+''.join(paths)+ticks+'</svg>'
 
 
+def nodes_glances_script():
+    """Toggle + state preservation for collapsible node rows; the nodes block
+    is re-rendered by patchLive every 5 s, so expanded state is kept in a Set
+    and re-applied through a MutationObserver after each patch."""
+    return '''<script>
+(()=>{const root=document.querySelector('[data-live-block="nodes"]');if(!root)return;
+const store=new Set;
+try{const saved=sessionStorage.getItem('onyx-nodes-expanded');if(saved)JSON.parse(saved).forEach(k=>store.add(k))}catch(e){}
+function apply(){root.querySelectorAll('.node-glance').forEach(el=>{const on=store.has(el.dataset.nodeKey||'');el.classList.toggle('expanded',on);const h=el.querySelector('.node-glance-head');if(h)h.setAttribute('aria-expanded',on?'true':'false')})}
+function toggle(card){const key=card.dataset.nodeKey||'';if(store.has(key))store.delete(key);else store.add(key);try{sessionStorage.setItem('onyx-nodes-expanded',JSON.stringify([...store]))}catch(e){}apply()}
+root.addEventListener('click',e=>{const head=e.target.closest('.node-glance-head');if(head)toggle(head.closest('.node-glance'))});
+root.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const head=e.target.closest('.node-glance-head');if(head){e.preventDefault();toggle(head.closest('.node-glance'))}});
+new MutationObserver(apply).observe(root,{childList:true});
+apply();
+})();
+</script>'''
 def nodes_glances(live, path):
     """Dashboard card body: proxy traffic and federated users on managed nodes."""
     nodes=(live or {}).get('nodes') or []
@@ -1567,22 +1592,29 @@ def nodes_glances(live, path):
         title=esc(node.get('location') or node.get('country_name') or node.get('url',''))
         subtitle=esc(node.get('url','')) if node.get('location') else esc(node.get('country_name',''))
         if node.get('version'): subtitle+=' · v'+esc(node.get('version'))
+        # Ключ для сохранения состояния «развёрнуто» между живыми обновлениями.
+        key=esc(node.get('url',''))
         if not node.get('online'):
-            rows.append(f'''<div class="node-glance offline"><div class="node-glance-head"><span class="node-flag">{flag_img}</span><div class="node-glance-name"><strong>{title}</strong><small>{subtitle}</small></div><span class="badge">Нет данных</span></div><p class="node-glance-error">{esc(node.get('error') or 'Нода не отвечает.')}</p></div>''')
-            continue
-        rates=node.get('rates') or {}; totals=node.get('totals') or {}
-        users=node.get('users') or []
-        active=sum(1 for u in users if u.get('active'))
-        traffic_value=size(totals.get('up',0)+totals.get('down',0))
-        shown=users[:6]
-        more=len(users)-len(shown)
-        user_rows=''.join(f'<div class="node-user{" on" if u.get("active") else ""}"><i></i><span>{esc(u["name"])} · {esc(u["device"])}</span><small>{esc(labels.get(u.get("protocol",""),u.get("protocol","")))}</small></div>' for u in shown)
-        more_row=f'<div class="node-user more"><span>+{more} подключений</span></div>' if more>0 else ''
-        empty_row='<p class="node-users-empty">Профили этой панели на ноде не активированы</p>' if not users else ''
-        rows.append(f'''<div class="node-glance"><div class="node-glance-head"><span class="node-flag">{flag_img}</span><div class="node-glance-name"><strong>{title}</strong><small>{subtitle}</small></div><span class="badge {'on' if active else ''}">{'Онлайн' if active else 'Без трафика'}</span></div><div class="node-glance-stats"><div><span>↓ Получение</span><b>{fmt_rate(rates.get('down'))}</b></div><div><span>↑ Отправка</span><b>{fmt_rate(rates.get('up'))}</b></div><div><span>Трафик ноды</span><b>{traffic_value}</b></div><div><span>Пользователи</span><b>{active} из {len(users)}</b></div></div><div class="node-glance-users">{user_rows}{more_row}{empty_row}</div></div>''')
+            body=f'<p class="node-glance-error">{esc(node.get("error") or "Нода не отвечает.")}</p>'
+            badge='<span class="badge">Нет данных</span>'
+        else:
+            rates=node.get('rates') or {}; totals=node.get('totals') or {}
+            users=node.get('users') or []
+            active=sum(1 for u in users if u.get('active'))
+            traffic_value=size(totals.get('up',0)+totals.get('down',0))
+            shown=users[:6]
+            more=len(users)-len(shown)
+            user_rows=''.join(f'<div class="node-user{" on" if u.get("active") else ""}"><i></i><span>{esc(u["name"])} · {esc(u["device"])}</span><small>{esc(labels.get(u.get("protocol",""),u.get("protocol","")))}</small></div>' for u in shown)
+            more_row=f'<div class="node-user more"><span>+{more} подключений</span></div>' if more>0 else ''
+            empty_row='<p class="node-users-empty">Профили этой панели на ноде не активированы</p>' if not users else ''
+            badge_class='on' if active else ''
+            badge_text='Онлайн' if active else 'Без трафика'
+            badge=f'<span class="badge {badge_class}">{badge_text}</span>'
+            body=f'''<div class="node-glance-stats"><div><span>↓ Получение</span><b>{fmt_rate(rates.get('down'))}</b></div><div><span>↑ Отправка</span><b>{fmt_rate(rates.get('up'))}</b></div><div><span>Трафик ноды</span><b>{traffic_value}</b></div><div><span>Пользователи</span><b>{active} из {len(users)}</b></div></div><div class="node-glance-users">{user_rows}{more_row}{empty_row}</div>'''
+        rows.append(f'''<div class="node-glance" data-node-key="{key}"><div class="node-glance-head" role="button" tabindex="0" aria-expanded="false" aria-label="Развернуть ноду {title}"><span class="node-flag">{flag_img}</span><div class="node-glance-name"><strong>{title}</strong><small>{subtitle}</small></div>{badge}<span class="node-glance-chevron" aria-hidden="true">{icon('chevron-down')}</span></div><div class="node-glance-body">{body}</div></div>''')
     empty='<p class="empty">Ноды не подключены — вся подписка обслуживается этой панелью. <a href="'+esc(path)+'/nodes">Подключить ноду →</a></p>' if not nodes else ''
     footer=f'<p class="note">Суммарно по нодам: ↓ {fmt_rate(total_down_rate or None)} · ↑ {fmt_rate(total_up_rate or None)} · {active_users} активных подключений из {total_users}. Активность — передача данных за последние 90 секунд.</p>' if nodes else ''
-    return ('<div class="dashboard-nodes">'+(empty or ''.join(rows))+'</div>'+footer)
+    return ('<div class="dashboard-nodes">'+(empty or ''.join(rows))+'</div>'+footer+nodes_glances_script())
 
 
 def _dashboard_body_legacy(data, subs, profiles, traffic, path, domain, csrf, proxy_link, current, hours=1, nodes=None, node_series=None, node_summary=None):
