@@ -24,32 +24,6 @@ LISTS = ('direct_ips', 'direct_domains', 'ipv4_domains')
 DEFAULTS = {key: [] for key in LISTS}
 DEFAULTS['block_torrents'] = False
 
-# Preset bundles shown in the UI. Flags are emoji on purpose: the routing tab
-# must not depend on the node flag bundle. geoip/geosite tags resolve from the
-# standard Xray geo databases shipped next to the binary.
-IP_PRESETS = [
-    ('🏠', 'Приватные', ['geoip:private']),
-    ('🇮🇷', 'Иран', ['geoip:ir']),
-    ('🇨🇳', 'Китай', ['geoip:cn']),
-    ('🇷🇺', 'Россия', ['geoip:ru']),
-    ('🇻🇳', 'Вьетнам', ['geoip:vn']),
-    ('🇪🇸', 'Испания', ['geoip:es']),
-    ('🇮🇩', 'Индонезия', ['geoip:id']),
-    ('🇺🇦', 'Украина', ['geoip:ua']),
-]
-
-DOMAIN_PRESETS = [
-    ('🏠', 'Локальные', ['geosite:private']),
-    ('🇮🇷', 'Иран', ['domain:ir', 'geosite:ir']),
-    ('🇨🇳', 'Китай', ['domain:cn', 'geosite:cn']),
-    ('🇷🇺', 'Россия', ['domain:ru', 'domain:su', 'domain:рф', 'domain:xn--p1ai']),
-    ('🇻🇳', 'Вьетнам', ['domain:vn', 'geosite:vn']),
-    ('🇺🇦', 'Украина', ['domain:ua', 'geosite:ua']),
-    ('🇪🇸', 'Испания', ['domain:es', 'geosite:es']),
-    ('🇮🇩', 'Индонезия', ['domain:id', 'geosite:id']),
-]
-
-
 class RoutingError(ValueError):
     pass
 

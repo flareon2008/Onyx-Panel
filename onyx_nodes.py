@@ -1,6 +1,5 @@
 """Secure Onyx Panel node registry, API authentication and federation client."""
 import base64
-import hashlib
 import hmac
 import ipaddress
 import json

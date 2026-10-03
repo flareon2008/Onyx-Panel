@@ -14,13 +14,7 @@ import urllib.request
 
 API = "https://api.telegram.org/bot%s/%s"
 TIMEOUT = 15
-TOKEN_RE_CHARS = set("0123456789ABCDEFabcdef_-")
-
 EVENT_KEYS = ("expiry", "logins", "cascades", "backups")
-
-
-def default_config():
-    return {"token": "", "chat": "", "events": {key: True for key in EVENT_KEYS}}
 
 
 def normalize_config(data):

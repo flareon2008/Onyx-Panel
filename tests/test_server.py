@@ -24,7 +24,7 @@ _ast.parse(_code, feature_version=(3, 10))  # Ubuntu 22.04 ships Python 3.10
 _spec = importlib.util.spec_from_file_location("onyx_server_extract", _extract_path)
 srv = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(srv)
 
-import onyx_webapi, onyx_access, onyx_totp
+import onyx_webapi, onyx_totp
 import onyx_telegram as tg
 
 store={"admin":{"user":"admin","hash":srv.hash_password("secret1")},

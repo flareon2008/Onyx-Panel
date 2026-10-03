@@ -2,7 +2,7 @@
 
 Run from the repository root:  python tests/test_modules.py
 """
-import base64, hashlib, hmac, json, os, sys, tempfile, time
+import base64, hashlib, hmac, os, sys, tempfile
 import urllib.request as _ur
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

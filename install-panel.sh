@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.8.38..."
+    echo "Updating Onyx Panel 1.9.0..."
 else
-    echo "Configuring Onyx Panel 1.8.38..."
+    echo "Configuring Onyx Panel 1.9.0..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -1730,7 +1730,7 @@ from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from onyx_subscriptions import PREFIX as SUB_PREFIX
 from onyx_panel_extras import preview_document
-from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, openflux_ui, client_records, nodes_ui, cascade_ui, cascade_state_view, routing_ui, updates_ui, icon
+from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, client_records, nodes_ui, cascade_ui, cascade_state_view, routing_ui, updates_ui, icon
 import onyx_metrics as server_metrics
 import onyx_update as web_updates
 import onyx_components as components
@@ -2551,7 +2551,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.8.38","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.0","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -4355,7 +4355,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.8.38
+Description=Onyx Panel 1.9.0
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4911,9 +4911,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.8.38 UPDATED"
+echo "          Onyx Panel 1.9.0 UPDATED"
 else
-echo "         Onyx Panel 1.8.38 IS READY"
+echo "         Onyx Panel 1.9.0 IS READY"
 fi
 echo "============================================================"
 echo
