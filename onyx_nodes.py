@@ -326,3 +326,9 @@ def metrics(node, timeout=10):
     """Proxy traffic totals and per-profile activity from one managed node."""
     data = request(node, 'GET', API_PREFIX + '/metrics', timeout=timeout)
     return data if isinstance(data, dict) else {}
+
+
+def node_status(node, timeout=6):
+    """Lightweight availability probe: version, domain and location."""
+    data = request(node, 'GET', API_PREFIX + '/status', timeout=timeout)
+    return data if isinstance(data, dict) else {}

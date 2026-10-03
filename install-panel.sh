@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.9.1..."
+    echo "Updating Onyx Panel 1.9.2..."
 else
-    echo "Configuring Onyx Panel 1.9.1..."
+    echo "Configuring Onyx Panel 1.9.2..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -1730,7 +1730,7 @@ from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from onyx_subscriptions import PREFIX as SUB_PREFIX
 from onyx_panel_extras import preview_document
-from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, client_records, nodes_ui, cascade_ui, cascade_state_view, routing_ui, updates_ui, icon
+from onyx_ui import page_layout, login_ui, dashboard_body, dashboard_page, users_ui, editor_ui, client_records, nodes_ui, nodes_live_block, cascade_ui, cascade_state_view, routing_ui, updates_ui, icon
 import onyx_metrics as server_metrics
 import onyx_update as web_updates
 import onyx_components as components
@@ -2271,21 +2271,32 @@ def federation_names():
             mapping[federation_id(sub.get("id",""),device.get("id",""))]=(sub.get("name","Подписка"),device.get("name","Устройство"))
     return mapping
 
-def fetch_node_live(node,names):
-    """One node snapshot: totals plus federated users mapped back by id."""
-    snapshot={"url":node.get("url",""),"country_code":node.get("country_code","UN"),
+def fetch_node_live(node,names,current=""):
+    """One node snapshot: version, totals and federated users mapped back by id."""
+    snapshot={"id":node.get("id",""),"url":node.get("url",""),"country_code":node.get("country_code","UN"),
               "country_name":node.get("country_name","Сервер"),"location":node.get("name",""),
-              "enabled":bool(node.get("enabled",True)),"online":False,"error":"",
-              "rates":{"up":None,"down":None},"totals":{"up":0,"down":0},"users":[]}
+              "registry_version":str(node.get("version","") or ""),
+              "enabled":bool(node.get("enabled",True)),"online":False,"outdated":False,"error":"",
+              "version":"","rates":{"up":None,"down":None},"totals":{"up":0,"down":0},"users":[]}
     if not snapshot["enabled"]:
+        snapshot["version"]=snapshot["registry_version"]
         snapshot["error"]="Нода отключена в этой панели."
         return snapshot
     try:
         data=node_api.metrics(node)
     except node_api.NodeError as exc:
         text=str(exc)
+        # The node is reachable but has no /metrics: it predates statistics.
+        # Probe /status for the real version so the UI can say what to do.
+        try:
+            status=node_api.node_status(node)
+            snapshot["version"]=str(status.get("version","") or "")
+        except Exception:
+            pass
+        snapshot["version"]=snapshot["version"] or snapshot["registry_version"]
         if "not found" in text.lower():
-            snapshot["error"]="Нода не поддерживает статистику — обновите Onyx Panel на ноде."
+            snapshot["outdated"]=True
+            snapshot["error"]=("Нода на версии "+(snapshot["version"] or "?")+" без статистики — обновите Onyx Panel на ноде: SSH → onyx-panel-update.")
         else:
             snapshot["error"]="Нода не отвечает или отклонила API-токен."
         return snapshot
@@ -2295,6 +2306,7 @@ def fetch_node_live(node,names):
         return snapshot
     totals=data.get("totals") if isinstance(data.get("totals"),dict) else {}
     snapshot["online"]=True
+    snapshot["version"]=str(data.get("version","") or "") or snapshot["registry_version"]
     snapshot["rates"]={"up":totals.get("up_rate"),"down":totals.get("down_rate")}
     snapshot["totals"]={"up":max(0,int(totals.get("up",0) or 0)),"down":max(0,int(totals.get("down",0) or 0))}
     for profile in data.get("profiles",[]) or []:
@@ -2305,13 +2317,16 @@ def fetch_node_live(node,names):
             "protocol":str(profile.get("protocol","")),"active":bool(profile.get("active")),
             "up":max(0,int(profile.get("up",0) or 0)),"down":max(0,int(profile.get("down",0) or 0))})
     snapshot["users"].sort(key=lambda u:(not u["active"],-(u["up"]+u["down"])))
+    if current and snapshot["version"] and web_updates.version_tuple(snapshot["version"])<web_updates.version_tuple(current):
+        snapshot["outdated"]=True
     return snapshot
 
 def refresh_nodes_live():
     try:
         nodes=node_api.load_nodes(NODES_FILE)
         names=federation_names()
-        worker=lambda node: fetch_node_live(node,names)
+        current=web_updates.current_version()
+        worker=lambda node: fetch_node_live(node,names,current)
         if nodes:
             with ThreadPoolExecutor(max_workers=min(8,len(nodes))) as pool:
                 data=list(pool.map(worker,nodes))
@@ -2551,7 +2566,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.9.1","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.2","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -2574,7 +2589,7 @@ class Handler(BaseHTTPRequestHandler):
                         "protocol":user.get("protocol",""),"enabled":user.get("enabled",True),
                         "up":max(0,int(item.get("up",0) or 0)),"down":max(0,int(item.get("down",0) or 0)),
                         "active":bool(item.get("service_active")) and last>0 and time.time()-last<=90})
-                self.send_json({"ok":True,
+                self.send_json({"ok":True,"version":web_updates.current_version(),
                     "totals":{"up":max(0,int(latest.get("up",0) or 0)),"down":max(0,int(latest.get("down",0) or 0)),
                               "up_rate":latest.get("up_rate"),"down_rate":latest.get("down_rate"),
                               "fresh":bool(latest.get("traffic_fresh")),"time":latest.get("time",0)},
@@ -2750,6 +2765,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok":True,**web_updates.notes_public()}); return
         if path==PANEL_PATH+"/component-status":
             self.send_json(components.status()); return
+        if path==PANEL_PATH+"/nodes-state":
+            # Живой срез состояния нод для страницы «Ноды»: версии, трафик и
+            # пользователи. Фрагменты собираются на сервере, чтобы JS просто
+            # подставлял готовый безопасный HTML.
+            live=nodes_live()
+            self.send_json({"ok":True,"age":live.get("age"),
+                            "nodes":[{"id":s.get("id",""),"html":nodes_live_block(s,PANEL_PATH)}
+                                     for s in live.get("nodes",[])]}); return
         if path==PANEL_PATH+"/openflux-qr":
             profile_id=parse_qs(urlparse(self.path).query).get("id",[""])[0]
             profile=next((item for item in openflux.profile_states() if item.get("id")==profile_id),None)
@@ -4355,7 +4378,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.9.1
+Description=Onyx Panel 1.9.2
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -4911,9 +4934,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.9.1 UPDATED"
+echo "          Onyx Panel 1.9.2 UPDATED"
 else
-echo "         Onyx Panel 1.9.1 IS READY"
+echo "         Onyx Panel 1.9.2 IS READY"
 fi
 echo "============================================================"
 echo

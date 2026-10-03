@@ -15,7 +15,7 @@ MAX_DEVICES = 50
 # assets and /login never reach this check; everything else redirects to the
 # dashboard. POSTs are denied server-side except /logout.
 OBSERVER_PAGES = ("/", "/dashboard", "/dashboard-data", "/clients-state",
-                  "/users", "/nodes", "/cascade", "/cascade-state",
+                  "/users", "/nodes", "/nodes-state", "/cascade", "/cascade-state",
                   "/routing", "/updates", "/restart-status", "/logout")
 
 
