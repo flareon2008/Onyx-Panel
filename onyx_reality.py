@@ -28,8 +28,13 @@ DEFAULT_PORT = 2053
 DEFAULT_DEST = 'www.wildberries.ru:443'
 DEST_RE = re.compile(r'^[a-zA-Z0-9._\-]+:\d{1,5}$')
 SHORT_ID_RE = re.compile(r'^[0-9a-f]{0,16}$')
-KEY_RE = re.compile(r'^[A-Za-z0-9+/]{43}=?$')
+KEY_RE = re.compile(r'^[A-Za-z0-9\-_]{43}=?$')   # URL-safe base64, без padding
 _lock = onyx_warp._lock
+
+
+def _b64key(value):
+    """X25519-ключ в URL-safe base64 без padding — формат Reality в Xray 26+."""
+    return str(value or '').strip().rstrip('=').replace('+', '-').replace('/', '_')
 
 
 class RealityError(ValueError):
@@ -49,7 +54,7 @@ def load(path):
     # и обновления не падали на устаревшем состоянии.
     for key in ('private_key', 'public_key'):
         if isinstance(value.get(key), str):
-            value[key] = value[key].rstrip('=')
+            value[key] = _b64key(value[key])
     return value
 
 
@@ -84,9 +89,9 @@ def validate(state):
     if not isinstance(names, list) or not names or any(not re.match(r'^[a-zA-Z0-9._\-]+$', str(n)) for n in names):
         raise RealityError('SNI маски указан некорректно.')
     state['server_names'] = [str(n).lower() for n in names]
-    # Xray 26+ принимает X25519-ключи Reality только без base64-padding (43 символа).
-    state['private_key'] = str(state.get('private_key', '')).rstrip('=')
-    state['public_key'] = str(state.get('public_key', '')).rstrip('=')
+    # Xray 26+ принимает X25519-ключи Reality только в URL-safe base64 без padding.
+    state['private_key'] = _b64key(state.get('private_key', ''))
+    state['public_key'] = _b64key(state.get('public_key', ''))
     if not KEY_RE.match(state['private_key']):
         raise RealityError('Приватный ключ Reality должен быть X25519-ключом в base64.')
     if not KEY_RE.match(state['public_key']):
