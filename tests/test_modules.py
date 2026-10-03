@@ -162,6 +162,38 @@ onyx_update.get_status()
 assert onyx_update.load_notes() == []
 onyx_update.clear_notes()
 print('UPDATE NOTIFICATIONS OK')
+# ---- node registry sync: version refresh + heal of stale enabled=false
+import onyx_nodes
+nodes_tmp = Path(tempfile.mkdtemp())
+registry = str(nodes_tmp / 'nodes.json')
+registry_state = [
+    {'id': 'aaaa', 'url': 'https://a.example.com', 'token': 'a' * 43, 'country_code': 'FI',
+     'country_name': 'Финляндия', 'name': 'Хельсинки', 'version': '1.8.8', 'enabled': True},
+    {'id': 'bbbb', 'url': 'https://b.example.com', 'token': 'b' * 43, 'country_code': 'DE',
+     'country_name': 'Германия', 'name': 'Франкфурт', 'version': '1.8.8', 'enabled': False},
+]
+onyx_nodes.save_nodes(registry, registry_state)
+
+# live probes: a answered with a fresh version, b answers despite enabled=false
+live_a = {'id': 'aaaa', 'enabled': True, 'online': True, 'version': '1.9.6'}
+live_b = {'id': 'bbbb', 'enabled': True, 'online': True, 'version': '1.9.6'}
+assert onyx_nodes.sync_registry(registry, [registry_state[0], registry_state[1]], [live_a, live_b]) is True
+merged = {n['id']: n for n in onyx_nodes.load_nodes(registry)}
+assert merged['aaaa']['version'] == '1.9.6'
+assert merged['bbbb']['version'] == '1.9.6' and merged['bbbb']['enabled'] is True
+print('NODE REGISTRY SYNC OK')
+
+# no changes -> no write
+assert onyx_nodes.sync_registry(registry, list(merged.values()), [live_a, live_b]) is False
+# failed probe (offline, no version) does not heal or touch the record
+dead = {'id': 'aaaa', 'enabled': True, 'online': False, 'version': ''}
+assert onyx_nodes.sync_registry(registry, [merged['aaaa']], [dead]) is False
+# a node deleted while the refresh ran is not resurrected by stale snapshots
+onyx_nodes.save_nodes(registry, [dict(merged['bbbb'], version='1.9.6')])
+assert onyx_nodes.sync_registry(registry, [merged['aaaa']], [live_a]) is False
+assert [n['id'] for n in onyx_nodes.load_nodes(registry)] == ['bbbb']
+print('NODE REGISTRY EDGE CASES OK')
+
 # ---- Python 3.10 grammar check (Ubuntu 22.04 target): no 3.12+ f-string syntax
 import ast
 import glob

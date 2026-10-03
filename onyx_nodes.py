@@ -203,6 +203,42 @@ def save_nodes(path, nodes):
     atomic_json(path, nodes)
 
 
+def sync_registry(path, nodes, snapshots):
+    """Fold live probe results back into the registry: refresh each version and
+    re-enable nodes that answer. Nothing in the panel can switch a node off, so
+    a record with enabled=false is stale state — without the heal it keeps the
+    add-time version and the «Отключена» badge forever. Merges onto a fresh
+    load, so a concurrent add or delete is not overwritten."""
+    updates = {}
+    for node, snapshot in zip(nodes, snapshots):
+        if not isinstance(node, dict) or not isinstance(snapshot, dict):
+            continue
+        version = str(snapshot.get('version', '') or '')
+        heal = bool(snapshot.get('enabled')) and not node.get('enabled', True)
+        if not version and not heal:
+            continue
+        updates[str(node.get('id', ''))] = {'version': version[:32], 'heal': heal}
+    if not updates:
+        return False
+    fresh = load_nodes(path)
+    changed = False
+    for node in fresh:
+        if not isinstance(node, dict):
+            continue
+        update = updates.get(str(node.get('id', '')))
+        if not update:
+            continue
+        if update['version'] and update['version'] != str(node.get('version', '') or ''):
+            node['version'] = update['version']
+            changed = True
+        if update['heal']:
+            node['enabled'] = True
+            changed = True
+    if changed:
+        save_nodes(path, fresh)
+    return changed
+
+
 def public_node(node):
     return {key: value for key, value in node.items() if key != 'token'}
 

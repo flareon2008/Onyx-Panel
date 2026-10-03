@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.9.6..."
+    echo "Updating Onyx Panel 1.9.7..."
 else
-    echo "Configuring Onyx Panel 1.9.6..."
+    echo "Configuring Onyx Panel 1.9.7..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2283,18 +2283,21 @@ def fetch_node_live(node,names,current=""):
               "enabled":bool(node.get("enabled",True)),"online":False,"outdated":False,"error":"",
               "version":"","rates":{"up":None,"down":None},"totals":{"up":0,"down":0},"users":[]}
     if not snapshot["enabled"]:
-        snapshot["version"]=snapshot["registry_version"]
-        snapshot["error"]="Нода отключена в этой панели."
-        return snapshot
+        # Nothing in the panel can switch a node off, so enabled=false is stale
+        # state. The node is probed like any other; a successful answer clears
+        # the flag in the snapshot here and in the registry via sync_registry().
+        snapshot["stale_disabled"]=True
     try:
         data=node_api.metrics(node)
     except node_api.NodeError as exc:
         text=str(exc)
+        stale=snapshot.pop("stale_disabled",False)
         # The node is reachable but has no /metrics: it predates statistics.
         # Probe /status for the real version so the UI can say what to do.
         try:
             status=node_api.node_status(node)
             snapshot["version"]=str(status.get("version","") or "")
+            if stale: snapshot["enabled"]=True
         except Exception:
             pass
         snapshot["version"]=snapshot["version"] or snapshot["registry_version"]
@@ -2305,12 +2308,14 @@ def fetch_node_live(node,names,current=""):
             snapshot["error"]="Нода не отвечает или отклонила API-токен."
         return snapshot
     except Exception as exc:
+        snapshot.pop("stale_disabled",None)
         snapshot["error"]="Неизвестная ошибка опроса ноды."
         print("node metrics failed:",node.get("url"),type(exc).__name__,file=sys.stderr,flush=True)
         return snapshot
     totals=data.get("totals") if isinstance(data.get("totals"),dict) else {}
     snapshot["online"]=True
     snapshot["version"]=str(data.get("version","") or "") or snapshot["registry_version"]
+    if snapshot.pop("stale_disabled",False): snapshot["enabled"]=True
     snapshot["rates"]={"up":totals.get("up_rate"),"down":totals.get("down_rate")}
     snapshot["totals"]={"up":max(0,int(totals.get("up",0) or 0)),"down":max(0,int(totals.get("down",0) or 0))}
     for profile in data.get("profiles",[]) or []:
@@ -2337,6 +2342,9 @@ def refresh_nodes_live():
         else:
             data=[]
         record_nodes_history(data)
+        try: node_api.sync_registry(NODES_FILE,nodes,data)
+        except Exception as exc:
+            print("node registry sync failed:",type(exc).__name__,file=sys.stderr,flush=True)
         with NODES_LIVE_LOCK:
             NODES_LIVE["stamp"]=time.time()
             NODES_LIVE["data"]=data
@@ -2633,7 +2641,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.9.6","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.7","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -4448,7 +4456,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.9.6
+Description=Onyx Panel 1.9.7
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -5004,9 +5012,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.9.6 UPDATED"
+echo "          Onyx Panel 1.9.7 UPDATED"
 else
-echo "         Onyx Panel 1.9.6 IS READY"
+echo "         Onyx Panel 1.9.7 IS READY"
 fi
 echo "============================================================"
 echo
