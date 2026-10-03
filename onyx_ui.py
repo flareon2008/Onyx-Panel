@@ -1082,7 +1082,12 @@ dialog{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 # iOS focus zoom, and touch targets stay comfortable on every device.
 CSS += '''
 @media(max-width:740px){
-  input,select,textarea{font-size:16px}
+  /* iOS auto-zooms a focused field whose effective font-size is under
+     16px; class rules elsewhere (.palette-dialog input, .search-field
+     input, mono token fields) beat a plain element selector, so this
+     one must stay important. TOTP cells keep their designed digits. */
+  input,select,textarea{font-size:16px!important}
+  .totp-cells input{font-size:22px!important}
   input[type=checkbox],input[type=radio]{width:17px;height:17px}
   .page-head{flex-wrap:wrap}
   .page-head .actions{width:100%;justify-content:flex-start}
