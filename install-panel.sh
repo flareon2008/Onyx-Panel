@@ -457,9 +457,9 @@ XRAY_PATH="$(cat "$XRAY_PATH_FILE")"
 [[ "$XRAY_PATH" =~ ^/vless-[a-f0-9]{24}$ ]] || die "Stored VLESS path is invalid."
 
 if [[ "$UPDATING" == "1" ]]; then
-    echo "Updating Onyx Panel 1.9.8..."
+    echo "Updating Onyx Panel 1.9.9..."
 else
-    echo "Configuring Onyx Panel 1.9.8..."
+    echo "Configuring Onyx Panel 1.9.9..."
 fi
 INSTALL_CREDENTIALS="/etc/onyx-panel/install-credentials"
 if [[ "$UPDATING" == "1" ]]; then
@@ -2641,7 +2641,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.api_auth(): return
             if path==node_api.API_PREFIX+"/status":
                 loc=node_api.load_location(LOCATION_FILE)
-                self.send_json({"ok":True,"api_version":1,"version":"1.9.8","domain":DOMAIN,
+                self.send_json({"ok":True,"api_version":1,"version":"1.9.9","domain":DOMAIN,
                     "location":loc,"capabilities":["vless","hysteria","awg20","awg31","federation"]}); return
             if path==node_api.API_PREFIX+"/profiles":
                 result=[]
@@ -4456,7 +4456,7 @@ fi
 echo "[4/6] Creating systemd service..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Onyx Panel 1.9.8
+Description=Onyx Panel 1.9.9
 After=network-online.target caddy.service tproxy-server.service mtproxy.service onyx-panel-firewall.service
 Wants=network-online.target
 Requires=onyx-panel-firewall.service
@@ -5012,9 +5012,9 @@ fi
 echo
 echo "============================================================"
 if [[ "$UPDATING" == "1" ]]; then
-echo "          Onyx Panel 1.9.8 UPDATED"
+echo "          Onyx Panel 1.9.9 UPDATED"
 else
-echo "         Onyx Panel 1.9.8 IS READY"
+echo "         Onyx Panel 1.9.9 IS READY"
 fi
 echo "============================================================"
 echo
